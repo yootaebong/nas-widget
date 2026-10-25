@@ -22,47 +22,30 @@ struct Dot: View {
     var body: some View { Circle().fill(ok ? Color.green : Color.red).frame(width: 7, height: 7) }
 }
 
+/// 위 칸 이름, 아래 숫자(수준별 색). 기기 줄의 한 칸.
 struct Metric: View {
     var label: String
-    var value: Int
+    var text: String
+    var color: Color
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 2) {
-                Text(label).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
-                Spacer(minLength: 0)
-                Text("\(value)%").font(.system(size: 11, weight: .semibold).monospacedDigit())
-            }
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.quaternary)
-                    Capsule().fill(levelColor(value)).frame(width: g.size.width * CGFloat(min(value, 100)) / 100)
-                }
-            }.frame(height: 3)
-        }
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+            Text(text).font(.system(size: 13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.8)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// 기기 온도(가장 뜨거운 센서). 못 읽으면 "-".
-struct TempText: View {
-    var value: Int?
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 2) {
-                Text("온도").font(.system(size: 9)).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                Text(value.map { "\($0)°" } ?? "-")
-                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(value.map(tempColor) ?? .secondary)
-            }
-            Color.clear.frame(height: 3)
-        }.frame(width: 48)
-    }
+extension Metric {
+    init(label: String, value: Int) { self.init(label: label, text: "\(value)%", color: levelColor(value)) }
+    /// 기기 온도(가장 뜨거운 센서). 못 읽으면 "-".
+    init(temp: Int?) { self.init(label: "온도", text: temp.map { "\($0)°" } ?? "-", color: temp.map(tempColor) ?? .secondary) }
 }
 
 struct SystemsView: View {
     var status: NasStatus
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(status.systems) { s in
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
@@ -72,7 +55,7 @@ struct SystemsView: View {
                     Metric(label: "CPU", value: s.cpu)
                     Metric(label: "메모리", value: s.mem)
                     Metric(label: "디스크", value: s.disk)
-                    TempText(value: s.temp)
+                    Metric(temp: s.temp)
                 }
             }
         }

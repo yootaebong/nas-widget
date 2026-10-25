@@ -43,6 +43,7 @@ killall chronod
 | `DASHBOARD_URL` | | "대시보드 열기" 버튼·위젯 탭으로 열 주소. 비우면 버튼이 사라짐 |
 
 xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 씁니다.
+**여기 넣은 값은 빌드된 앱의 Info.plist 에 평문으로 들어갑니다** — 비밀 경로를 넣었다면 빌드한 앱을 남에게 주지 마세요.
 
 ## 상태 JSON 형식
 
@@ -65,7 +66,7 @@ xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 
 
 - 앱은 샌드박스 안에서 네트워크 클라이언트 권한만 씁니다.
 - 내부망 NAS 의 `http://` 주소를 읽으려고 `NSAllowsArbitraryLoads` 를 켜 두었습니다. 상태 주소를 인터넷에 열 거라면 HTTPS 와 인증을 붙이세요.
-- 상태 주소에 비밀 경로를 쓴다면 `Local.xcconfig` 에만 두세요 — 이 파일은 `.gitignore` 에 들어 있습니다.
+- 상태 주소에 비밀 경로를 쓴다면 `Local.xcconfig` 에만 두세요 — 이 파일은 `.gitignore` 에 들어 있습니다. 다만 빌드 결과물에는 남습니다.
 
 ## 라이선스
 

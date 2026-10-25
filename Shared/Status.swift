@@ -8,6 +8,7 @@ struct NasStatus: Codable {
         var cpu: Int
         var mem: Int
         var disk: Int
+        var temp: Int?
         var id: String { name }
     }
     struct Service: Codable, Identifiable {
@@ -31,9 +32,9 @@ struct NasStatus: Codable {
 
     static let sample = NasStatus(
         time: Int(Date().timeIntervalSince1970),
-        systems: [.init(name: "NAS", up: true, cpu: 12, mem: 37, disk: 84),
-                  .init(name: "맥북", up: true, cpu: 45, mem: 75, disk: 74),
-                  .init(name: "데스크톱", up: true, cpu: 64, mem: 57, disk: 52)],
+        systems: [.init(name: "NAS", up: true, cpu: 12, mem: 37, disk: 84, temp: 52),
+                  .init(name: "맥북", up: true, cpu: 45, mem: 75, disk: 74, temp: 61),
+                  .init(name: "데스크톱", up: true, cpu: 64, mem: 57, disk: 52, temp: nil)],
         services: [.init(name: "웹", ok: true, value: "56ms"), .init(name: "Redis", ok: true, value: nil),
                    .init(name: "DB", ok: true, value: nil), .init(name: "인터넷", ok: true, value: "7ms")],
         firing: 1, firing_names: ["웹 응답 느림"], relay_connections: 14,
@@ -66,4 +67,8 @@ enum StatusClient {
 
 func levelColor(_ v: Int) -> Color {
     v >= 90 ? .red : v >= 70 ? .yellow : .green
+}
+
+func tempColor(_ v: Int) -> Color {
+    v >= 90 ? .red : v >= 75 ? .yellow : .green
 }

@@ -52,7 +52,7 @@ xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `time` | int | 수집 시각(유닉스 초) |
-| `systems[]` | `{name, up, cpu, mem, disk}` | 기기별 상태. `cpu`·`mem`·`disk` 는 0~100 정수(%). 70 이상 노랑, 90 이상 빨강. 작은 위젯은 첫 기기의 디스크를 그림 |
+| `systems[]` | `{name, up, cpu, mem, disk, temp?}` | 기기별 상태. `cpu`·`mem`·`disk` 는 0~100 정수(%). 70 이상 노랑, 90 이상 빨강. `temp` 는 가장 뜨거운 센서 °C 정수(없거나 null 이면 "-"), 75 이상 노랑, 90 이상 빨강. 작은 위젯은 첫 기기의 디스크를 그림 |
 | `services[]` | `{name, ok, value?}` | 서비스 상태. `value` 는 정상일 때 옆에 보일 글자(예: `"56ms"`) |
 | `firing` | int? | 울리는 알림 수. 없으면 "알림 모름" |
 | `firing_names` | string[]? | 울리는 알림 이름 |

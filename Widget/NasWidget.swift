@@ -86,7 +86,7 @@ struct NasWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "NasWidget", provider: Provider()) { NasWidgetView(entry: $0) }
             .configurationDisplayName("NAS 상태")
-            .description("기기별 CPU·메모리·디스크와 서비스 상태")
+            .description("기기별 CPU·메모리·디스크·온도와 서비스 상태")
             .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

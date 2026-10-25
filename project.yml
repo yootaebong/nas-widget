@@ -1,0 +1,58 @@
+name: NasWidget
+options:
+  bundleIdPrefix: io.taebong
+  deploymentTarget:
+    macOS: "14.0"
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+settings:
+  base:
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "3"
+targets:
+  NasWidget:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: NAS 위젯
+        LSUIElement: false
+        NASStatusURL: $(NAS_STATUS_URL)
+        DashboardURL: $(DASHBOARD_URL)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}
+    entitlements:
+      path: App/App.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    dependencies:
+      - target: NasWidgetExtension
+  NasWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources: [Widget, Shared]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: NAS 위젯
+        NASStatusURL: $(NAS_STATUS_URL)
+        DashboardURL: $(DASHBOARD_URL)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true

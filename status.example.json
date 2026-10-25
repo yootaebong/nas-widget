@@ -1,0 +1,18 @@
+{
+  "time": 1792914726,
+  "systems": [
+    { "name": "NAS", "up": true, "cpu": 12, "mem": 37, "disk": 84 },
+    { "name": "맥북", "up": true, "cpu": 45, "mem": 75, "disk": 74 }
+  ],
+  "services": [
+    { "name": "웹", "ok": true, "value": "56ms" },
+    { "name": "DB", "ok": false }
+  ],
+  "firing": 1,
+  "firing_names": ["DB 다운"],
+  "relay_connections": 14,
+  "containers": [
+    { "name": "postgres", "mem_mb": 1830 },
+    { "name": "grafana", "mem_mb": 301 }
+  ]
+}

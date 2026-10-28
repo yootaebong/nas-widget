@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct NasWidgetApp: App {
     var body: some Scene {
-        WindowGroup("NAS 위젯") { ContentView().frame(width: 360) }
+        WindowGroup("서버 상태 위젯") { ContentView().frame(width: 360) }
             .windowResizability(.contentSize)
     }
 }
@@ -38,7 +38,7 @@ struct ContentView: View {
                 Text(error ?? "불러오는 중…").foregroundStyle(.secondary)
             }
             Divider()
-            Text("위젯 추가: 바탕화면 우클릭 → 위젯 편집 → 'NAS 위젯' 검색.\n위젯에는 위젯 우클릭 → '위젯 편집' 에서 같은 주소를 넣어요 (여기 칸은 연결 시험용).")
+            Text("위젯 추가: 바탕화면 우클릭 → 위젯 편집 → '서버 상태' 검색.\n위젯에는 위젯 우클릭 → '위젯 편집' 에서 같은 주소를 넣어요 (여기 칸은 연결 시험용).")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("연결 시험") { Task { await load() } }

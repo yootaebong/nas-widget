@@ -1,6 +1,6 @@
-# NAS 위젯
+# 서버 상태 위젯 (nas-widget)
 
-집 NAS·맥·PC 의 CPU·메모리·디스크와 서비스 상태를 macOS 바탕화면 위젯으로 보여 주는 작은 앱입니다.
+집 서버·맥·PC 의 CPU·메모리·디스크와 서비스 상태를 macOS 바탕화면 위젯으로 보여 주는 작은 앱입니다.
 위젯은 HTTP 로 상태 JSON 하나를 읽어 그리기만 합니다. 그 JSON 을 만드는 서버는 [`server/`](server/) 에 도커로 들어 있습니다.
 
 A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JSON from your home server, plus a Docker server that builds that JSON from Beszel. UI text is Korean.
@@ -12,8 +12,8 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
 ### 어떻게 돌아가나요
 
 ```
- [맥·NAS·PC 마다]            [NAS(또는 늘 켜 둔 컴퓨터) 한 대]              [내 맥]
- Beszel 에이전트  ──수치──▶  Beszel 허브 ──▶ 상태 서버(server/)  ──JSON──▶  NAS 위젯
+ [맥·PC·서버 마다]           [중앙 서버 한 대 (늘 켜 둔 컴퓨터)]            [내 맥]
+ Beszel 에이전트  ──수치──▶  Beszel 허브 ──▶ 상태 서버(server/)  ──JSON──▶  위젯
 ```
 
 - **Beszel 에이전트**: 기기마다 하나씩 깔아 CPU·메모리·디스크·온도를 재는 작은 프로그램입니다.
@@ -25,14 +25,14 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
 
 ### 준비물
 
-- 늘 켜 둔 컴퓨터 한 대(NAS·홈서버·미니 PC) + 거기에 **Docker**
+- **중앙 서버**: 늘 켜 둔 컴퓨터 한 대(NAS·홈서버·미니 PC·안 쓰는 노트북 무엇이든) + 거기에 **Docker**. 이 안내에서 "중앙 서버" 는 이 컴퓨터를 말합니다
   - 시놀로지는 패키지 센터에서 **Container Manager** 를 설치하고, 제어판 → 터미널에서 SSH 를 켜 둡니다.
 - 위젯을 놓을 **macOS 14 이상**의 맥
 - 맥과 서버가 같은 집 네트워크에 있거나, 밖에서도 보려면 [Tailscale](https://tailscale.com) 같은 VPN
 
-### 1단계 — 서버 띄우기 (NAS 에서, 약 5분)
+### 1단계 — 중앙 서버에 띄우기 (약 5분)
 
-1. 서버에 SSH 로 들어가 이 저장소를 받습니다. `git` 이 없으면 GitHub 에서 "Code → Download ZIP" 으로 받아 `server` 폴더만 NAS 에 올려도 됩니다.
+1. 중앙 서버에 SSH 로 들어가(또는 그 컴퓨터의 터미널을 열어) 이 저장소를 받습니다. `git` 이 없으면 GitHub 에서 "Code → Download ZIP" 으로 받아 `server` 폴더만 중앙 서버에 올려도 됩니다.
    ```sh
    git clone https://github.com/yootaebong/nas-widget.git
    cd nas-widget/server
@@ -43,36 +43,50 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
    openssl rand -hex 24
    ```
    나온 글자를 `config.toml` 맨 위 `token = ""` 의 따옴표 안에 붙여 넣습니다. 이 값은 3단계에서 위젯에도 넣으니 적어 두세요.
-3. 띄웁니다. 시놀로지는 앞에 `sudo` 를 붙입니다.
+3. 상태 서버를 열 IP 를 정합니다. 중앙 서버의 내부망 IP(예: `192.168.0.10`) 또는 Tailscale IP(`100.x.y.z`)를 넣습니다. 도커는 방화벽을 우회하므로 모든 네트워크(`0.0.0.0`)에 열지 않게 해 두었습니다.
+   ```sh
+   cp .env.example .env      # LISTEN_IP= 를 내 IP 로 고치기
+   ```
+   시놀로지에서 Tailscale 로만 볼 거면 `LISTEN_IP=127.0.0.1` 을 넣습니다. 시놀로지 Tailscale 은 Tailscale IP 를 장치로 만들지 않아 거기엔 열 수 없고, 대신 Tailscale 로 들어온 연결을 127.0.0.1 로 넘겨줍니다(집 안 다른 기기에서는 안 보여서 가장 안전합니다).
+4. 띄웁니다. 시놀로지는 앞에 `sudo` 를 붙입니다.
    ```sh
    docker compose up -d
    ```
 
 ### 2단계 — 기기 붙이기 (Beszel, 기기당 약 2분)
 
-1. NAS 에서 브라우저로 `http://localhost:8090` 을 엽니다. 처음 들어온 사람이 관리자 계정을 만듭니다.
-   - 다른 컴퓨터에서 열려면 `compose.yaml` 의 `127.0.0.1:8090:8090` 에서 `127.0.0.1` 을 NAS 의 내부 IP 로 바꾸고 `docker compose up -d` 를 다시 합니다. 계정을 만든 뒤에는 되돌려 두는 편이 안전합니다.
-2. 오른쪽 위 **"시스템 추가"** 를 누르고 기기 이름(위젯에 보일 이름)을 적습니다. 화면에 나온 설치 명령을 그 기기의 터미널에 붙여 넣으면 됩니다. 맥·윈도우·리눅스·NAS 모두 됩니다.
+1. 중앙 서버에서 브라우저로 `http://localhost:8090` 을 엽니다. 처음 들어온 사람이 관리자 계정을 만듭니다.
+   - 다른 컴퓨터에서 열려면 `compose.yaml` 의 `127.0.0.1:8090:8090` 에서 `127.0.0.1` 을 중앙 서버의 내부 IP 로 바꾸고 `docker compose up -d` 를 다시 합니다. 계정을 만든 뒤에는 되돌려 두는 편이 안전합니다.
+2. 오른쪽 위 **"시스템 추가"** 를 누르고 기기 이름(위젯에 보일 이름)을 적습니다. 화면에 나온 설치 명령을 그 기기의 터미널에 붙여 넣으면 됩니다. 맥·윈도우·리눅스·NAS 모두 됩니다(중앙 서버 자신도 붙이면 위젯에 나옵니다).
 3. 방금 만든 Beszel **계정(이메일·비밀번호)** 을 `config.toml` 의 `[beszel]` 칸에 적고, 서버를 다시 띄웁니다. 설정은 서버가 뜰 때만 읽습니다.
    ```sh
    docker compose restart nas-widget-server
    ```
 4. 확인: 브라우저나 터미널에서 아래 주소가 기기 목록을 돌려주면 서버는 끝입니다.
    ```sh
-   curl -H "Authorization: Bearer <토큰>" http://<NAS IP>:8080/status
+   curl -H "Authorization: Bearer <토큰>" http://<중앙 서버 IP>:8080/status
    ```
 
 서비스 줄(웹사이트·DB 가 살아 있는지)을 보고 싶으면 `config.toml` 의 `[[services]]` 예시를 내 주소로 바꾸고 다시 `restart` 합니다. 필요 없으면 지웁니다.
 
 ### 3단계 — 맥에 위젯 놓기 (약 2분, Xcode 필요 없음)
 
-1. [Releases](https://github.com/yootaebong/nas-widget/releases/latest) 에서 `NasWidget.zip` 을 받아 압축을 풀고, `NasWidget.app` 을 **응용 프로그램** 폴더로 옮깁니다.
-2. 터미널을 열어 아래 한 줄을 붙여 넣습니다. 애플 개발자 서명이 없는 앱이라, 이걸 안 하면 "손상되었기 때문에 열 수 없습니다" 가 뜹니다(실제로 손상된 건 아닙니다).
+1. [Releases](https://github.com/yootaebong/nas-widget/releases/latest) 에서 `NasWidget.zip` 과 `NasWidget.zip.sha256` 을 같은 폴더(보통 "다운로드")에 받습니다.
+2. 받은 파일을 확인합니다. 어느 쪽이든 실패하면 열지 말고 지우세요.
    ```sh
-   xattr -cr /Applications/NasWidget.app
+   cd ~/Downloads
+   shasum -a 256 -c NasWidget.zip.sha256     # OK — 다운로드가 깨지지 않았는지
    ```
-3. 앱을 엽니다. 창에 상태 주소(`http://<NAS IP>:8080/status`)와 토큰을 넣고 **"연결 시험"** 을 눌러 수치가 나오는지 봅니다.
-4. 바탕화면 빈 곳을 우클릭 → **위젯 편집** → "NAS 위젯" 을 검색해 원하는 크기를 끌어다 놓습니다.
+   이 저장소의 GitHub Actions 가 만든 파일이 맞는지까지 보려면 [GitHub CLI](https://cli.github.com)(`brew install gh`)로 출처 증명을 확인합니다. 해시 파일은 zip 과 같은 곳에서 오니 바꿔치기까지는 못 잡지만, 이건 잡습니다.
+   ```sh
+   gh attestation verify NasWidget.zip -R yootaebong/nas-widget
+   ```
+3. 압축을 풀고 `NasWidget.app` 을 **응용 프로그램** 폴더로 옮긴 뒤, 다운로드 표시만 지웁니다. 애플 개발자 서명이 없는 앱이라, 이걸 안 하면 "손상되었기 때문에 열 수 없습니다" 가 뜹니다(실제로 손상된 건 아닙니다). 2번 확인을 마친 파일에만 하세요.
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/NasWidget.app
+   ```
+4. 앱을 엽니다. 창에 상태 주소(`http://<중앙 서버 IP>:8080/status`)와 토큰을 넣고 **"연결 시험"** 을 눌러 수치가 나오는지 봅니다.
+5. 바탕화면 빈 곳을 우클릭 → **위젯 편집** → "서버 상태" 를 검색해 원하는 크기를 끌어다 놓습니다.
 5. 놓은 위젯을 우클릭 → **"위젯 편집"** → 같은 상태 주소와 토큰을 넣습니다. 앱 창의 칸은 시험용이라 위젯에는 따로 넣어야 합니다.
 
 위젯 크기별로 보이는 것:
@@ -88,7 +102,8 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
 |---|---|
 | 위젯에 "위젯 편집에서 상태 주소를 넣어 주세요" | 3단계 5번 — 위젯 자체에 주소를 넣었는지 |
 | "토큰이 맞지 않아요" | 위젯 토큰과 `config.toml` 의 `token` 이 같은지(앞뒤 공백 없이) |
-| "NAS 에 연결 못 함" | 맥에서 `curl http://<NAS IP>:8080/health` 가 `ok` 인지. 밖이면 Tailscale 이 켜져 있는지 |
+| "중앙 서버에 연결 못 함" | 맥에서 `curl http://<중앙 서버 IP>:8080/health` 가 `ok` 인지. 밖이면 Tailscale 이 켜져 있는지 |
+| "공개 주소는 https:// 로" | `http://` 는 집 안·Tailscale 의 IP 주소(192.168.x, 10.x, 100.x)나 `.local`·점 없는 이름에만 씁니다. `.ts.net` 같은 이름은 IP 로 넣으세요. 밖에서 보려면 Tailscale 을 쓰거나 HTTPS 프록시 뒤에 두세요 |
 | 기기 목록이 비어 있음 | `config.toml` 의 Beszel 이메일·비밀번호, 고친 뒤 `restart` 했는지. 기기를 등록한 바로 그 계정이어야 합니다 |
 | 서버가 바로 꺼짐 | `docker compose logs nas-widget-server` — 토큰이 비었거나, `config.toml` 오타, 권한(`chmod 644 config.toml`) 문제를 한국어로 알려 줍니다 |
 | 앱을 새 버전으로 바꿨는데 위젯 모양이 그대로 | 위젯을 지우고 다시 놓습니다. 그래도 그대로면 로그아웃했다가 다시 로그인 |
@@ -163,8 +178,11 @@ xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 
 ## 보안 메모
 
 - 앱은 샌드박스 안에서 네트워크 클라이언트 권한만 씁니다.
-- 내부망 NAS 의 `http://` 주소를 읽으려고 `NSAllowsArbitraryLoads` 를 켜 두었습니다. 상태 주소를 인터넷에 열 거라면 HTTPS 와 인증을 붙이세요.
-- 위젯 편집에 넣은 주소·토큰은 macOS 위젯 설정에 저장됩니다. 상태 서버 토큰은 남과 공유하지 마세요.
+- `http://` 는 집 안·Tailscale 주소에만 씁니다(ATS `NSAllowsLocalNetworking`). 공개 주소에 http 를 넣으면 위젯이 토큰을 보내지 않고 거절합니다 — 가는 길에 누구나 읽을 수 있어서요.
+- 응답은 512KB 까지만 받고, 위젯에 다 못 그리는 항목은 버립니다.
+- 위젯 편집에 넣은 주소·토큰은 macOS 위젯 설정에, 앱 창의 값은 앱 설정 파일에 평문으로 저장됩니다(위젯 편집 칸은 가려지지 않습니다). 토큰은 상태 조회 전용이지만, 새었다고 생각되면 `config.toml` 의 `token` 을 바꾸고 `docker compose restart nas-widget-server` 한 뒤 위젯에 새 값을 넣으세요.
+- 상태 서버는 Bearer 헤더 토큰만 받습니다(`?token=` 주소 방식은 `allow_query_token = true` 일 때만 — 프록시 로그에 남습니다). 동시 연결 32개, 요청 헤더 15초 제한이 있고, root 가 아닌 사용자·읽기 전용 파일 시스템·권한 없이 돕니다.
+- 릴리스는 버전·해시를 고정한 도구로 GitHub Actions 에서만 만들고, 같은 태그의 파일을 덮어쓰지 않습니다. 받은 파일은 위 3단계 2번처럼 확인하세요.
 - `Local.xcconfig` 는 `.gitignore` 에 들어 있지만, 넣은 값은 빌드 결과물에 남습니다.
 
 ## 라이선스

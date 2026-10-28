@@ -123,7 +123,7 @@ struct ContainersView: View {
     var body: some View {
         if let cs = status.containers, !cs.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text("NAS 도커 메모리 상위").font(.system(size: 9)).foregroundStyle(.secondary)
+                Text("도커 메모리 상위").font(.system(size: 9)).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     ForEach(cs) { c in
                         HStack(spacing: 3) {

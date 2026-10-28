@@ -1,7 +1,7 @@
 {
   "time": 1792914726,
   "systems": [
-    { "name": "NAS", "up": true, "cpu": 12, "mem": 37, "disk": 84, "temp": 52 },
+    { "name": "중앙 서버", "up": true, "cpu": 12, "mem": 37, "disk": 84, "temp": 52 },
     { "name": "맥북", "up": true, "cpu": 45, "mem": 75, "disk": 74, "temp": null }
   ],
   "services": [

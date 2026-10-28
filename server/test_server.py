@@ -7,12 +7,14 @@ import logging
 import os
 import socket
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from unittest import mock
 
 import nas_widget_server as srv
 
@@ -31,7 +33,7 @@ BESZEL_ALERTS = [{"name": "CPU", "expand": {"system": {"name": "NAS"}}}]
 
 
 class FakeServer:
-    """핸들러 함수(path, headers, body) -> (code, obj) 를 받아 스레드로 띄우는 작은 서버."""
+    """핸들러 함수(path, headers, body) -> (code, obj[, 응답 헤더]) 를 받아 스레드로 띄우는 작은 서버."""
 
     def __init__(self, route) -> None:
         self.route = route
@@ -41,9 +43,11 @@ class FakeServer:
         class H(BaseHTTPRequestHandler):
             def _do(self, body: bytes | None) -> None:
                 fake.calls.append(self.path)
-                code, obj = fake.route(self.path, self.headers, body)
+                code, obj, *extra = fake.route(self.path, self.headers, body)
                 data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
                 self.send_response(code)
+                for k, v in (extra[0] if extra else {}).items():
+                    self.send_header(k, v)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
@@ -133,9 +137,10 @@ class ServerTest(unittest.TestCase):
         self.fakes.append(f)
         return f
 
-    def start(self, cfg: dict[str, Any]) -> str:
+    def start(self, cfg: dict[str, Any], env: dict[str, str] | None = None) -> str:
         cfg.setdefault("cache_seconds", 0)
-        s = srv.make_server(cfg, "127.0.0.1", 0)
+        with mock.patch.dict(os.environ, env or {}):
+            s = srv.make_server(cfg, "127.0.0.1", 0)
         threading.Thread(target=s.serve_forever, daemon=True).start()
         self.servers.append(s)
         return f"http://127.0.0.1:{s.server_address[1]}"
@@ -163,10 +168,82 @@ class ServerTest(unittest.TestCase):
         base = self.start({"token": TOKEN})
         self.assertEqual(self.get(base + "/status")[0], 401)
         self.assertEqual(self.get(base + "/status", {"Authorization": "Bearer nope"})[0], 401)
-        self.assertEqual(self.get(base + "/status?token=nope")[0], 401)
         self.assertEqual(self.get(base + "/status", {"Authorization": f"Bearer {TOKEN}"})[0], 200)
-        self.assertEqual(self.get(base + f"/status?token={TOKEN}")[0], 200)
+        self.assertEqual(self.get(base + f"/status?token={TOKEN}")[0], 401)  # 쿼리 토큰은 기본 거부
         self.assertEqual(self.get(base + "/health"), (200, "ok"))
+
+    def test_query_token_opt_in(self) -> None:
+        base = self.start({"token": TOKEN, "allow_query_token": True})
+        self.assertEqual(self.get(base + "/status?token=nope")[0], 401)
+        self.assertEqual(self.get(base + f"/status?token={TOKEN}")[0], 200)
+        self.assertEqual(self.get(base + "/status", {"Authorization": f"Bearer {TOKEN}"})[0], 200)
+
+    # 연결 보호
+    def test_connection_limit(self) -> None:
+        base = self.start({}, env={"MAX_CONNECTIONS": "2"})
+        port = int(base.rsplit(":", 1)[1])
+        idle = [socket.create_connection(("127.0.0.1", port), timeout=5) for _ in range(2)]
+        try:
+            time.sleep(0.2)  # 두 연결이 슬롯을 잡을 때까지
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as third:
+                start = time.monotonic()
+                try:
+                    data = third.recv(1)
+                except ConnectionResetError:
+                    data = b""
+                self.assertEqual(data, b"")  # 요청도 받기 전에 닫힘
+                self.assertLess(time.monotonic() - start, 2)
+        finally:
+            for s in idle:
+                s.close()
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                self.assertEqual(self.get(base + "/status")[0], 200)
+                break
+            except (urllib.error.URLError, ConnectionError):
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.1)
+
+    def test_header_deadline(self) -> None:
+        old, srv.HEADER_DEADLINE_SECONDS = srv.HEADER_DEADLINE_SECONDS, 0.5
+        self.addCleanup(setattr, srv, "HEADER_DEADLINE_SECONDS", old)
+        base = self.start({})
+        port = int(base.rsplit(":", 1)[1])
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+            start = time.monotonic()
+            closed = False
+            for ch in b"GET /status HTTP/1.1\r\nX-Slow: " + b"a" * 100:
+                try:
+                    s.sendall(bytes([ch]))
+                except OSError:
+                    closed = True
+                    break
+                s.settimeout(0.1)
+                try:
+                    if s.recv(1) == b"":
+                        closed = True
+                        break
+                except TimeoutError:
+                    pass
+                except OSError:
+                    closed = True
+                    break
+            self.assertTrue(closed)
+            self.assertLess(time.monotonic() - start, 3)
+
+    def test_source_redirect_not_followed(self) -> None:
+        target = self.fake(prom_route)
+        redirect = lambda path, headers, body: (302, b"", {"Location": target.url + path})  # noqa: E731
+        bz = self.fake(redirect)
+        prom = self.fake(redirect)
+        base = self.start({"beszel": self.beszel_cfg(bz.url), "prometheus": {"url": prom.url}})
+        code, body = self.get(base + "/status")
+        self.assertEqual(code, 200)
+        self.assertIsNone(body["firing"])
+        self.assertEqual(body["systems"], [])
+        self.assertEqual(target.calls, [])  # 비밀번호·토큰이 다른 주소로 가지 않음
 
     def test_no_token_is_open(self) -> None:
         base = self.start({})

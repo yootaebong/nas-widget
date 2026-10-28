@@ -2,34 +2,48 @@ name: Release
 
 # v* 태그를 push 하면 Xcode 없이 받아 쓰는 NasWidget.zip 을 만들어 GitHub Releases 에 올린다.
 # 주소는 빌드에 넣지 않는다 — 받은 사람이 위젯 편집에서 넣는다.
+# 받은 사람이 진짜 이 저장소의 CI 가 만든 파일인지 확인할 수 있게 sha256 과 출처 증명(attestation)을 같이 남긴다.
 on:
   push:
     tags: ["v*"]
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+env:
+  XCODEGEN_VERSION: "2.46.0"
+  XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
 
 jobs:
   build:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - name: 프로젝트 생성
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 프로젝트 생성 (XcodeGen 버전·해시 고정)
         run: |
-          brew install xcodegen
+          curl -fsSL -o xcodegen.zip "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  xcodegen.zip" | shasum -a 256 -c
+          unzip -q xcodegen.zip -d "$RUNNER_TEMP"
           : > Local.xcconfig
-          xcodegen generate
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" generate
       - name: 빌드 (arm64 + x86_64)
         run: |
           xcodebuild -project NasWidget.xcodeproj -scheme NasWidget -configuration Release \
             -derivedDataPath build -destination 'generic/platform=macOS' \
             ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO MARKETING_VERSION="${GITHUB_REF_NAME#v}" build -quiet
-      - name: 압축
-        run: ditto -c -k --keepParent build/Build/Products/Release/NasWidget.app NasWidget.zip
+      - name: 압축·해시
+        run: |
+          ditto -c -k --keepParent build/Build/Products/Release/NasWidget.app NasWidget.zip
+          shasum -a 256 NasWidget.zip > NasWidget.zip.sha256
+          cat NasWidget.zip.sha256
+      - name: 출처 증명
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: NasWidget.zip
       - name: 릴리스 올리기
         env:
           GH_TOKEN: ${{ github.token }}
-        # 다시 돌리면 이미 있는 릴리스에 zip 만 바꿔 올린다
-        run: |
-          gh release create "$GITHUB_REF_NAME" NasWidget.zip --title "$GITHUB_REF_NAME" --generate-notes \
-            || gh release upload "$GITHUB_REF_NAME" NasWidget.zip --clobber
+        # 이미 있는 릴리스의 파일은 덮어쓰지 않는다 — 같은 태그로 다른 파일이 몰래 바뀌지 않게
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag NasWidget.zip NasWidget.zip.sha256 --title "$GITHUB_REF_NAME" --generate-notes

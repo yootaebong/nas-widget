@@ -62,7 +62,13 @@ struct Provider: AppIntentTimelineProvider {
 
 struct NasWidgetView: View {
     @Environment(\.widgetFamily) var family
+    @Environment(\.widgetRenderingMode) var renderingMode
     var entry: Entry
+
+    /// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그리는데, 기본 글자색(이름·칸 제목)은
+    /// 밝은 바탕에 흰색으로 나와 사라진다. 색을 직접 정한 숫자는 보이므로 기본 글자색도 직접 정한다
+    /// (.secondary 는 이 색을 옅게 따라간다).
+    private var ink: AnyShapeStyle { renderingMode == .fullColor ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.black) }
 
     var body: some View {
         Group {
@@ -99,6 +105,7 @@ struct NasWidgetView: View {
                 }.foregroundStyle(.secondary)
             }
         }
+        .foregroundStyle(ink)
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(entry.dashboard)
     }

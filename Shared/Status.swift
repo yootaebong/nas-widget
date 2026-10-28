@@ -64,7 +64,8 @@ func isLocalHost(_ host: String?) -> Bool {
     if h.hasSuffix(".") { h = String(h.dropLast()) }
     // 16843009·0x01010101 처럼 정수 하나로 쓴 IP 는 공개 주소일 수 있다
     if h.hasPrefix("0x") || h.allSatisfy(\.isNumber) { return false }
-    // ATS(NSAllowsLocalNetworking)가 http 를 허락하는 이름과 맞춘다: 점 없는 이름·.local·IP
+    // ATS 는 모두 허용(NSAllowsArbitraryLoads)이라 http 를 막는 곳은 여기뿐이다.
+    // (NSAllowsLocalNetworking 은 Tailscale 100.x 를 내부망으로 안 쳐 -1022 로 막는다 — 2026-10-28 실측)
     if h == "localhost" || !h.contains(".") && !h.contains(":") || h.hasSuffix(".local") { return true }
     let p = h.split(separator: ".").compactMap { $0.allSatisfy(\.isNumber) ? UInt8($0) : nil }
     if p.count == 4 && h.split(separator: ".").count == 4 {

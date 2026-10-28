@@ -28,7 +28,7 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
 - **중앙 서버**: 늘 켜 둔 컴퓨터 한 대(NAS·홈서버·미니 PC·안 쓰는 노트북 무엇이든) + 거기에 **Docker**. 이 안내에서 "중앙 서버" 는 이 컴퓨터를 말합니다
   - 시놀로지는 패키지 센터에서 **Container Manager** 를 설치하고, 제어판 → 터미널에서 SSH 를 켜 둡니다.
 - 위젯을 놓을 **macOS 14 이상**의 맥
-- 맥과 서버가 같은 집 네트워크에 있거나, 밖에서도 보려면 [Tailscale](https://tailscale.com) 같은 VPN
+- 맥과 중앙 서버가 **같은 집 네트워크**(같은 공유기)에 있으면 됩니다. 밖에서도 보고 싶으면 [밖에서도 보려면](#밖에서도-보려면) 을 참고하세요
 
 ### 1단계 — 중앙 서버에 띄우기 (약 5분)
 
@@ -43,11 +43,11 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
    openssl rand -hex 24
    ```
    나온 글자를 `config.toml` 맨 위 `token = ""` 의 따옴표 안에 붙여 넣습니다. 이 값은 3단계에서 위젯에도 넣으니 적어 두세요.
-3. 상태 서버를 열 IP 를 정합니다. 중앙 서버의 내부망 IP(예: `192.168.0.10`) 또는 Tailscale IP(`100.x.y.z`)를 넣습니다. 도커는 방화벽을 우회하므로 모든 네트워크(`0.0.0.0`)에 열지 않게 해 두었습니다.
+3. 상태 서버를 열 IP 로 중앙 서버의 **집 안 IP**(예: `192.168.0.10`)를 넣습니다. 도커는 방화벽을 우회하므로 모든 네트워크(`0.0.0.0`)에 열지 않게 해 두었습니다.
    ```sh
-   cp .env.example .env      # LISTEN_IP= 를 내 IP 로 고치기
+   cp .env.example .env      # LISTEN_IP= 를 중앙 서버의 집 안 IP 로 고치기
    ```
-   시놀로지에서 Tailscale 로만 볼 거면 `LISTEN_IP=127.0.0.1` 을 넣습니다. 시놀로지 Tailscale 은 Tailscale IP 를 장치로 만들지 않아 거기엔 열 수 없고, 대신 Tailscale 로 들어온 연결을 127.0.0.1 로 넘겨줍니다(집 안 다른 기기에서는 안 보여서 가장 안전합니다).
+   집 안 IP 는 리눅스·시놀로지에서 `ip -4 addr`, 맥에서 `ipconfig getifaddr en0` 으로 봅니다(보통 `192.168.` 으로 시작). 시놀로지는 제어판 → 네트워크 → 네트워크 인터페이스에도 나옵니다.
 4. 띄웁니다. 시놀로지는 앞에 `sudo` 를 붙입니다.
    ```sh
    docker compose up -d
@@ -96,14 +96,29 @@ A tiny macOS desktop widget (WidgetKit, SwiftUI) that renders a single status JS
 
 숫자 색은 70% 이상 노랑, 90% 이상 빨강입니다(온도는 75°·90°). 바탕화면 위젯이 흐린(단색) 모드면 색이 안 보일 수 있습니다.
 
+### 밖에서도 보려면
+
+기본은 같은 집 네트워크입니다. 집 밖(회사·카페)에서도 위젯을 보려면 셋 중 하나를 고릅니다.
+
+| 방법 | 이런 분께 | 위젯에 넣는 주소 |
+|---|---|---|
+| **Tailscale**(가장 쉬움) | 설정 없이 바로 쓰고 싶을 때. 중앙 서버와 맥에 앱을 깔고 같은 계정으로 로그인 | `http://<중앙 서버 Tailscale IP>:8080/status` (100.x.y.z) |
+| **다른 VPN** — WireGuard·ZeroTier·시놀로지 VPN Server | 이미 쓰는 VPN 이 있을 때 | `http://<VPN 안 IP>:8080/status` |
+| **https 로 열기** — 시놀로지 리버스 프록시 + Let's Encrypt, Cloudflare Tunnel 등 | VPN 을 켜지 않고 보고 싶을 때 | `https://status.내도메인/status` |
+
+- **Tailscale**: 중앙 서버에서 `tailscale ip -4` 로 IP 를 보고, `.env` 의 `LISTEN_IP` 를 그 IP 로 바꾼 뒤 `docker compose up -d` 를 다시 합니다. 집 안에서도 그 주소로 됩니다.
+  - **시놀로지**의 Tailscale 패키지는 Tailscale IP 를 장치로 만들지 않아 그 IP 에는 열 수 없습니다(`ip -4 addr` 에 100.x 가 안 보이면 이 경우). 대신 `LISTEN_IP=127.0.0.1` 로 두면 Tailscale 로 들어온 연결이 그쪽으로 넘어옵니다. 이때는 집 안 IP 로는 안 보이니, 맥에서도 Tailscale 을 켜 두세요.
+- **다른 VPN**: 보통 10.x·172.16~31.x·192.168.x 주소를 써서 위젯이 http 를 그대로 받습니다. 그 밖의 주소를 쓰는 VPN 이면 https 방법을 쓰세요. `LISTEN_IP` 는 VPN 이 중앙 서버에 준 IP 로 바꿉니다.
+- **https 로 열기**: 인터넷에 열리므로 토큰이 유일한 문입니다 — 긴 토큰을 쓰세요. 프록시는 `http://<LISTEN_IP>:8080` 으로 넘기면 됩니다. Cloudflare Access 처럼 앞에 로그인 화면을 두는 방식은 위젯이 로그인을 못 해서 쓸 수 없습니다.
+
 ### 잘 안 될 때
 
 | 보이는 것 | 확인할 것 |
 |---|---|
 | 위젯에 "위젯 편집에서 상태 주소를 넣어 주세요" | 3단계 5번 — 위젯 자체에 주소를 넣었는지 |
 | "토큰이 맞지 않아요" | 위젯 토큰과 `config.toml` 의 `token` 이 같은지(앞뒤 공백 없이) |
-| "중앙 서버에 연결 못 함" | 맥에서 `curl http://<중앙 서버 IP>:8080/health` 가 `ok` 인지. 밖이면 Tailscale 이 켜져 있는지 |
-| "공개 주소는 https:// 로" | `http://` 는 집 안·Tailscale 의 IP 주소(192.168.x, 10.x, 100.x)나 `.local`·점 없는 이름에만 씁니다. `.ts.net` 같은 이름은 IP 로 넣으세요. 밖에서 보려면 Tailscale 을 쓰거나 HTTPS 프록시 뒤에 두세요 |
+| "중앙 서버에 연결 못 함" | 맥에서 `curl http://<중앙 서버 IP>:8080/health` 가 `ok` 인지. 맥이 같은 공유기에 붙어 있는지(밖이면 VPN 이 켜져 있는지) |
+| "공개 주소는 https:// 로" | `http://` 는 집 안·VPN 의 IP 주소(192.168.x, 10.x, 172.16~31.x, Tailscale 100.x)나 `.local`·점 없는 이름에만 씁니다. 그 밖의 주소는 [밖에서도 보려면](#밖에서도-보려면) 의 https 방법을 쓰세요 |
 | 기기 목록이 비어 있음 | `config.toml` 의 Beszel 이메일·비밀번호, 고친 뒤 `restart` 했는지. 기기를 등록한 바로 그 계정이어야 합니다 |
 | 서버가 바로 꺼짐 | `docker compose logs nas-widget-server` — 토큰이 비었거나, `config.toml` 오타, 권한(`chmod 644 config.toml`) 문제를 한국어로 알려 줍니다 |
 | 앱을 새 버전으로 바꿨는데 위젯 모양이 그대로 | 위젯을 지우고 다시 놓습니다. 그래도 그대로면 로그아웃했다가 다시 로그인 |
@@ -178,7 +193,7 @@ xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 
 ## 보안 메모
 
 - 앱은 샌드박스 안에서 네트워크 클라이언트 권한만 씁니다.
-- `http://` 는 집 안·Tailscale 주소에만 씁니다(ATS `NSAllowsLocalNetworking`). 공개 주소에 http 를 넣으면 위젯이 토큰을 보내지 않고 거절합니다 — 가는 길에 누구나 읽을 수 있어서요.
+- `http://` 는 집 안·VPN 주소에만 씁니다(ATS `NSAllowsLocalNetworking`). 공개 주소에 http 를 넣으면 위젯이 토큰을 보내지 않고 거절합니다 — 가는 길에 누구나 읽을 수 있어서요.
 - 응답은 512KB 까지만 받고, 위젯에 다 못 그리는 항목은 버립니다.
 - 위젯 편집에 넣은 주소·토큰은 macOS 위젯 설정에, 앱 창의 값은 앱 설정 파일에 평문으로 저장됩니다(위젯 편집 칸은 가려지지 않습니다). 토큰은 상태 조회 전용이지만, 새었다고 생각되면 `config.toml` 의 `token` 을 바꾸고 `docker compose restart nas-widget-server` 한 뒤 위젯에 새 값을 넣으세요.
 - 상태 서버는 Bearer 헤더 토큰만 받습니다(`?token=` 주소 방식은 `allow_query_token = true` 일 때만 — 프록시 로그에 남습니다). 동시 연결 32개, 요청 헤더 15초 제한이 있고, root 가 아닌 사용자·읽기 전용 파일 시스템·권한 없이 돕니다.

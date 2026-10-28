@@ -13,6 +13,7 @@ services:
     # environment:
     #   TOKEN: ${TOKEN}
     #   BESZEL_PASSWORD: ${BESZEL_PASSWORD}
+    #   GRAFANA_PASSWORD: ${GRAFANA_PASSWORD}
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

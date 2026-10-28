@@ -237,7 +237,8 @@ curl -H "Authorization: Bearer <토큰>" http://<중앙 서버 IP>:8080/status
 - 모든 설정 키는 [`server/config.example.toml`](server/config.example.toml) 에 주석으로 설명돼 있습니다.
 - 서비스 확인은 `http`(응답 코드 400 미만이면 정상)·`tcp`(포트가 열리면 정상)·`prometheus`(쿼리 결과가 1 이면 정상) 세 가지입니다.
 - Prometheus 가 있으면 `[prometheus]` 를 켜서 그쪽 알림(`ALERTS`)과 컨테이너 메모리(cAdvisor)도 보여 줄 수 있습니다.
-- 비밀번호를 파일에 두기 싫으면 환경 변수 `TOKEN`·`BESZEL_PASSWORD` 로 넣을 수 있습니다(`compose.yaml` 주석 참고).
+- Grafana 알림 규칙을 쓰면 `[grafana]` 를 켜서 울리는 알림을 알림 띠에 더합니다(서비스 계정 토큰 또는 계정·비밀번호).
+- 비밀번호를 파일에 두기 싫으면 환경 변수 `TOKEN`·`BESZEL_PASSWORD`·`GRAFANA_PASSWORD` 로 넣을 수 있습니다(`compose.yaml` 주석 참고).
 - 서버 컨테이너는 root 가 아닌 사용자, 읽기 전용 파일 시스템으로 돕니다.
 
 ## 직접 빌드 (개발용)

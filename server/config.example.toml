@@ -42,6 +42,16 @@ order = ["중앙 서버", "맥북"]
 # containers = true
 
 
+# ----- Grafana 알림 (선택) -----
+# Grafana 에서 만든 알림 규칙 가운데 울리는(Alerting) 것을 알림 띠에 더합니다.
+# [grafana]
+# url = "http://grafana:3000"
+# # 서비스 계정 토큰(권장, Viewer 면 충분) 또는 계정·비밀번호 중 하나.
+# token = ""
+# # user = "admin"
+# # password = ""        # 환경 변수 GRAFANA_PASSWORD 가 있으면 그 값이 우선
+
+
 # ----- 서비스 확인 -----
 # [[services]] 하나가 위젯의 서비스 한 줄입니다. name 과 아래 중 하나를 씁니다.
 # 도커 안에서 돌므로 localhost·127.0.0.1 은 이 컨테이너 자신입니다 — 이 서버의 것도 집 안 IP 로 적으세요.

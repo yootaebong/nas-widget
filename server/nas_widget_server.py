@@ -1,6 +1,6 @@
 """서버 상태 위젯의 상태 서버.
 
-Beszel 허브·Prometheus·HTTP/TCP 확인 결과를 모아 macOS 위젯이 읽는 상태 JSON 하나로 내려준다.
+Beszel 허브·Prometheus·Grafana 알림·HTTP/TCP 확인 결과를 모아 macOS 위젯이 읽는 상태 JSON 하나로 내려준다.
 Python 3.12 표준 라이브러리만 쓴다.
 
   GET /status  상태 JSON (설정 token 이 있으면 Bearer 헤더 필요, ?token= 은 allow_query_token = true 일 때만)
@@ -9,6 +9,7 @@ Python 3.12 표준 라이브러리만 쓴다.
 
 from __future__ import annotations
 
+import base64
 import hmac
 import json
 import logging
@@ -99,6 +100,8 @@ def load_config(path: str | None = None) -> Json:
         cfg["token"] = os.environ["TOKEN"]
     if os.environ.get("BESZEL_PASSWORD"):
         cfg.setdefault("beszel", {})["password"] = os.environ["BESZEL_PASSWORD"]
+    if os.environ.get("GRAFANA_PASSWORD") and "grafana" in cfg:
+        cfg["grafana"]["password"] = os.environ["GRAFANA_PASSWORD"]
     return cfg
 
 
@@ -180,6 +183,31 @@ def map_system(sy: Json) -> Json:
         "disk": round(max([i.get("dp", 0)] + efs)),
         "temp": round(i["dt"]) if i.get("dt") else None,
     }
+
+
+# ---------- Grafana ----------
+
+class Grafana:
+    """Grafana 관리 알림(Alerting). 토큰(서비스 계정) 또는 계정·비밀번호로 읽는다."""
+
+    def __init__(self, cfg: Json) -> None:
+        self.url = str(cfg.get("url", "")).rstrip("/")
+        self.token = str(cfg.get("token", ""))
+        self.user = str(cfg.get("user", "admin"))
+        self.password = str(cfg.get("password", ""))
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.url and (self.token or self.password))
+
+    def alert_names(self) -> list[str]:
+        if self.token:
+            auth = "Bearer " + self.token
+        else:
+            auth = "Basic " + base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
+        res = http_json(self.url + "/api/prometheus/grafana/api/v1/alerts", {"Authorization": auth})
+        return [a.get("labels", {}).get("alertname", "알림") for a in res["data"]["alerts"]
+                if str(a.get("state", "")).lower().startswith("alerting")]
 
 
 # ---------- Prometheus ----------
@@ -396,6 +424,7 @@ class Collector:
         self.cfg = cfg
         self.beszel = Beszel(cfg.get("beszel") or {})
         self.prom = Prometheus(cfg.get("prometheus") or {})
+        self.grafana = Grafana(cfg.get("grafana") or {})
         self.services: list[Json] = list(cfg.get("services") or [])
         validate_services(self.services)
         self.cache_seconds = float(cfg.get("cache_seconds", DEFAULT_CACHE_SECONDS))
@@ -424,6 +453,8 @@ class Collector:
                 sources.append(("Beszel", pool.submit(self.beszel.alert_names)))
             if self.prom.configured:
                 sources.append(("Prometheus", pool.submit(self.prom.alert_names)))
+            if self.grafana.configured:
+                sources.append(("Grafana", pool.submit(self.grafana.alert_names)))
             containers = pool.submit(self.prom.top_containers) if self.prom.configured and self.prom.containers else None
 
             if systems:

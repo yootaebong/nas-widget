@@ -12,8 +12,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.8"
-    CURRENT_PROJECT_VERSION: "9"
+    MARKETING_VERSION: "1.9"
+    CURRENT_PROJECT_VERSION: "10"
 targets:
   NasWidget:
     type: application
@@ -35,6 +35,8 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        # 연결 시험을 통과한 설정을 위젯과 나누는 곳(Shared/SharedConfig.swift)
+        com.apple.security.temporary-exception.files.home-relative-path.read-write: ["/Library/Application Support/NasWidget/"]
     dependencies:
       - target: NasWidgetExtension
   NasWidgetExtension:
@@ -58,3 +60,4 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        com.apple.security.temporary-exception.files.home-relative-path.read-only: ["/Library/Application Support/NasWidget/"]

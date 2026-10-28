@@ -12,8 +12,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.4"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "1.5"
+    CURRENT_PROJECT_VERSION: "6"
 targets:
   NasWidget:
     type: application
@@ -25,6 +25,7 @@ targets:
         CFBundleDisplayName: NAS 위젯
         LSUIElement: false
         NASStatusURL: $(NAS_STATUS_URL)
+        NASStatusToken: $(NAS_STATUS_TOKEN)
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -45,6 +46,7 @@ targets:
       properties:
         CFBundleDisplayName: NAS 위젯
         NASStatusURL: $(NAS_STATUS_URL)
+        NASStatusToken: $(NAS_STATUS_TOKEN)
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

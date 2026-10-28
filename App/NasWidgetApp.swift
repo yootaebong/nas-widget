@@ -1,5 +1,4 @@
 import SwiftUI
-import WidgetKit
 
 @main
 struct NasWidgetApp: App {
@@ -10,11 +9,24 @@ struct NasWidgetApp: App {
 }
 
 struct ContentView: View {
+    @AppStorage("statusURL") private var statusURL = ""
+    @AppStorage("token") private var token = ""
+    @AppStorage("dashboardURL") private var dashboardURL = ""
     @State private var status: NasStatus?
     @State private var error: String?
 
+    private var source: StatusSource { StatusSource(url: statusURL, token: token, dashboard: dashboardURL) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("상태 주소 (예: http://192.168.0.10:8080/status)", text: $statusURL)
+                SecureField("토큰 (선택)", text: $token)
+                TextField("대시보드 주소 (선택)", text: $dashboardURL)
+            }
+            .textFieldStyle(.roundedBorder)
+            .onSubmit { Task { await load() } }
+            Divider()
             if let status {
                 AlertBanner(status: status)
                 SystemsView(status: status)
@@ -26,11 +38,12 @@ struct ContentView: View {
                 Text(error ?? "불러오는 중…").foregroundStyle(.secondary)
             }
             Divider()
-            Text("위젯 추가: 바탕화면 우클릭 → 위젯 편집 → 'NAS 위젯' 검색").font(.caption).foregroundStyle(.secondary)
+            Text("위젯 추가: 바탕화면 우클릭 → 위젯 편집 → 'NAS 위젯' 검색.\n위젯에는 위젯 우클릭 → '위젯 편집' 에서 같은 주소를 넣어요 (여기 칸은 연결 시험용).")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("새로고침") { Task { await load() } }
-                if let dashboardURL {
-                    Button("대시보드 열기") { NSWorkspace.shared.open(dashboardURL) }
+                Button("연결 시험") { Task { await load() } }
+                if let dashboard = source.dashboard {
+                    Button("대시보드 열기") { NSWorkspace.shared.open(dashboard) }
                 }
             }
         }
@@ -39,8 +52,7 @@ struct ContentView: View {
     }
 
     func load() async {
-        do { status = try await StatusClient.fetch(); error = nil }
-        catch { self.error = "NAS 에 연결 못 함: \(error.localizedDescription)" }
-        WidgetCenter.shared.reloadAllTimelines()
+        do { status = try await StatusClient.fetch(source); error = nil }
+        catch { status = nil; self.error = "연결 못 함: \(error.localizedDescription)" }
     }
 }

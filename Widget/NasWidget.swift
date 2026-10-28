@@ -1,30 +1,55 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
+
+/// 위젯 우클릭 → "위젯 편집" 에서 넣는 값. 비우면 빌드 때 `Local.xcconfig` 값을 쓴다.
+struct NasWidgetConfig: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "NAS 위젯 설정"
+    static var description = IntentDescription("상태 JSON 주소와 토큰을 넣습니다.")
+
+    @Parameter(title: "상태 주소", description: "예: http://192.168.0.10:8080/status")
+    var statusURL: String?
+
+    @Parameter(title: "토큰 (선택)")
+    var token: String?
+
+    @Parameter(title: "대시보드 주소 (선택)", description: "위젯을 누르면 열 주소")
+    var dashboardURL: String?
+
+    var source: StatusSource { StatusSource(url: statusURL, token: token, dashboard: dashboardURL) }
+}
 
 struct Entry: TimelineEntry {
     var date: Date
     var status: NasStatus?
     var error: String?
+    var dashboard: URL?
 }
 
-struct Provider: TimelineProvider {
+struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> Entry { Entry(date: .now, status: .sample) }
 
-    func getSnapshot(in context: Context, completion: @escaping (Entry) -> Void) {
-        if context.isPreview { completion(placeholder(in: context)); return }
-        Task { completion(await load()) }
+    func snapshot(for configuration: NasWidgetConfig, in context: Context) async -> Entry {
+        context.isPreview ? placeholder(in: context) : await load(configuration.source)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
-        Task {
-            let e = await load()
-            completion(Timeline(entries: [e], policy: .after(.now.addingTimeInterval(300))))
+    func timeline(for configuration: NasWidgetConfig, in context: Context) async -> Timeline<Entry> {
+        Timeline(entries: [await load(configuration.source)], policy: .after(.now.addingTimeInterval(300)))
+    }
+
+    private func load(_ source: StatusSource) async -> Entry {
+        if source.badURL {
+            return Entry(date: .now, error: "상태 주소는 http:// 또는 https:// 로 시작해야 해요", dashboard: source.dashboard)
         }
-    }
-
-    private func load() async -> Entry {
-        do { return Entry(date: .now, status: try await StatusClient.fetch()) }
-        catch { return Entry(date: .now, status: nil, error: "NAS 에 연결 못 함 (네트워크 확인)") }
+        guard source.url != nil else {
+            return Entry(date: .now, error: "우클릭 → 위젯 편집에서 상태 주소를 넣어 주세요", dashboard: source.dashboard)
+        }
+        do { return Entry(date: .now, status: try await StatusClient.fetch(source), dashboard: source.dashboard) }
+        catch StatusError.unauthorized {
+            return Entry(date: .now, error: "토큰이 맞지 않아요 (위젯 편집에서 확인)", dashboard: source.dashboard)
+        } catch {
+            return Entry(date: .now, error: "NAS 에 연결 못 함 (네트워크 확인)", dashboard: source.dashboard)
+        }
     }
 }
 
@@ -68,7 +93,7 @@ struct NasWidgetView: View {
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
-        .widgetURL(dashboardURL)
+        .widgetURL(entry.dashboard)
     }
 
     func header(_ title: String, _ s: NasStatus) -> some View {
@@ -84,7 +109,7 @@ struct NasWidgetView: View {
 @main
 struct NasWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "NasWidget", provider: Provider()) { NasWidgetView(entry: $0) }
+        AppIntentConfiguration(kind: "NasWidget", intent: NasWidgetConfig.self, provider: Provider()) { NasWidgetView(entry: $0) }
             .configurationDisplayName("NAS 상태")
             .description("기기별 CPU·메모리·디스크·온도와 서비스 상태")
             .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])

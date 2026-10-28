@@ -259,10 +259,10 @@ class ServerTest(unittest.TestCase):
     def test_env_overrides(self) -> None:
         path = os.path.join(os.path.dirname(__file__), ".test_config.toml")
         with open(path, "w", encoding="utf-8") as f:
-            f.write('token = "file"\n[beszel]\nurl = "http://x"\npassword = "file"\n')
-        old = {k: os.environ.get(k) for k in ("CONFIG", "TOKEN", "BESZEL_PASSWORD")}
+            f.write('token = "file"\n[beszel]\nurl = "http://x"\npassword = "file"\n[grafana]\nurl = "http://g"\n')
+        old = {k: os.environ.get(k) for k in ("CONFIG", "TOKEN", "BESZEL_PASSWORD", "GRAFANA_PASSWORD")}
         try:
-            os.environ.update(CONFIG=path, TOKEN="env-t", BESZEL_PASSWORD="env-p")
+            os.environ.update(CONFIG=path, TOKEN="env-t", BESZEL_PASSWORD="env-p", GRAFANA_PASSWORD="env-g")
             cfg = srv.load_config()
         finally:
             os.remove(path)
@@ -273,6 +273,7 @@ class ServerTest(unittest.TestCase):
                     os.environ[k] = v
         self.assertEqual(cfg["token"], "env-t")
         self.assertEqual(cfg["beszel"]["password"], "env-p")
+        self.assertEqual(cfg["grafana"]["password"], "env-g")
 
     # (b) 기기 매핑·순서·알림
     def test_systems_and_alerts(self) -> None:
@@ -419,6 +420,25 @@ class ServerTest(unittest.TestCase):
         body = self.get(base + "/status")[1]
         self.assertEqual(body["firing"], 1)
         self.assertEqual(body["firing_names"], ["DB 다운"])
+
+    def test_grafana_alerts(self) -> None:
+        def route(path: str, headers, body):
+            if path != "/api/prometheus/grafana/api/v1/alerts":
+                return 404, {}
+            if headers.get("Authorization") not in ("Basic YWRtaW46Z3B3", "Bearer sa-tok"):  # admin:gpw
+                return 401, {}
+            return 200, {"status": "success", "data": {"alerts": [
+                {"labels": {"alertname": "인터넷 끊김"}, "state": "Alerting"},
+                {"labels": {"alertname": "Redis 죽음"}, "state": "Normal"},
+                {"labels": {"alertname": "relay 느림"}, "state": "Alerting (NoData)"}]}}
+
+        g = self.fake(route)
+        for cfg in ({"url": g.url, "password": "gpw"}, {"url": g.url, "token": "sa-tok"}):
+            body = self.get(self.start({"grafana": cfg}) + "/status")[1]
+            self.assertEqual(body["firing"], 2)
+            self.assertEqual(body["firing_names"], ["인터넷 끊김", "relay 느림"])
+        body = self.get(self.start({"grafana": {"url": g.url, "password": "wrong"}}) + "/status")[1]
+        self.assertIsNone(body["firing"])
 
     # (e) 컨테이너
     def test_containers(self) -> None:

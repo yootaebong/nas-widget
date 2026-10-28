@@ -334,6 +334,61 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(svcs["Redis"], {"name": "Redis", "ok": False})
         self.assertFalse(svcs["잘못"]["ok"])
 
+    def test_value_lines(self) -> None:
+        def api(path: str, headers, body):
+            if path == "/stats":
+                if headers.get("X-Api-Key") != "k":
+                    return 401, {}
+                return 200, {"data": {"visitors": 1234, "items": [{"last": "03:00"}], "on": True}}
+            if path == "/big":
+                return 200, b"[" + b"0," * srv.JSON_MAX_BYTES + b"0]"
+            if path == "/moved":
+                return 302, b"", {"Location": "/stats"}
+            return 404, {}
+
+        web = self.fake(api)
+        prom = self.fake(prom_route)
+        key = {"X-Api-Key": "k"}
+        base = self.start({"prometheus": {"url": prom.url}, "services": [
+            {"name": "방문자", "json": web.url + "/stats", "path": "data.visitors", "headers": key, "unit": "명"},
+            {"name": "백업", "json": web.url + "/stats", "path": "data.items.0.last", "headers": key},
+            {"name": "켜짐", "json": web.url + "/stats", "path": "data.on", "headers": key},
+            {"name": "많음", "json": web.url + "/stats", "path": "data.visitors", "headers": key, "max": 1000},
+            {"name": "충분", "json": web.url + "/stats", "path": "data.visitors", "headers": key, "min": 100},
+            {"name": "키없음", "json": web.url + "/stats", "path": "data.visitors"},
+            {"name": "없는칸", "json": web.url + "/stats", "path": "data.nope", "headers": key},
+            {"name": "큼", "json": web.url + "/big"},
+            {"name": "이동", "json": web.url + "/moved", "headers": key},
+            {"name": "지연", "prometheus_value": "rtt", "unit": "ms"},
+            {"name": "빈쿼리", "prometheus_value": "nothing"},
+        ]})
+        svcs = {s.pop("name"): s for s in self.get(base + "/status")[1]["services"]}
+        self.assertEqual(svcs["방문자"], {"ok": True, "value": "1,234명", "info": True})
+        self.assertEqual(svcs["백업"], {"ok": True, "value": "03:00", "info": True})
+        self.assertEqual(svcs["켜짐"], {"ok": True, "value": "예", "info": True})
+        self.assertEqual(svcs["많음"], {"ok": False, "value": "1,234"})
+        self.assertEqual(svcs["충분"], {"ok": True, "value": "1,234"})
+        for name in ["키없음", "없는칸", "큼", "이동", "빈쿼리"]:
+            self.assertEqual(svcs[name], {"ok": False, "info": True}, name)
+        self.assertEqual(svcs["지연"], {"ok": True, "value": "7ms", "info": True})
+        self.assertEqual(web.calls.count("/stats"), 7)  # "이동" 의 302 를 따라가지 않음
+
+    def test_show_value(self) -> None:
+        self.assertEqual(srv.show_value(0.5, ""), "0.5")
+        self.assertEqual(srv.show_value(12345678, ""), "12,345,678")
+        self.assertEqual(srv.show_value(999999.9, ""), "999,999.9")
+        self.assertEqual(srv.show_value(1e-7, ""), "0")
+        self.assertEqual(srv.show_value(12.5, "%"), "12.5%")
+        self.assertEqual(srv.show_value(1e22, ""), "1e+22")
+        self.assertEqual(srv.show_value({"a": 1}, ""), '{"a":1}')
+        with self.assertRaises(SystemExit):
+            srv.validate_services([{"name": "x", "json": "u", "min": "1"}])
+        self.assertEqual(srv.service_kind({"http": "u", "json": "v"}), "http")
+        self.assertEqual(srv.show_value(None, ""), "-")
+        self.assertEqual(len(srv.show_value("가" * 100, "")), srv.VALUE_MAX_CHARS)
+        self.assertFalse(srv.judge({"max": 10}, "abc"))
+        self.assertTrue(srv.judge({"max": 10}, "5"))
+
     # (d) Beszel 다운
     def test_beszel_down(self) -> None:
         base = self.start({"beszel": self.beszel_cfg(f"http://127.0.0.1:{closed_port()}"),

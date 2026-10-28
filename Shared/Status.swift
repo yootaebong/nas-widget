@@ -15,6 +15,8 @@ struct NasStatus: Codable {
         var name: String
         var ok: Bool
         var value: String?
+        /// 판정 없는 값 줄(회색). 서버 v1.7 부터
+        var info: Bool?
         var id: String { name }
     }
     struct Container: Codable, Identifiable {
@@ -35,7 +37,7 @@ struct NasStatus: Codable {
         systems: [.init(name: "중앙 서버", up: true, cpu: 12, mem: 37, disk: 84, temp: 52),
                   .init(name: "맥북", up: true, cpu: 45, mem: 75, disk: 74, temp: 61),
                   .init(name: "데스크톱", up: true, cpu: 64, mem: 57, disk: 52, temp: nil)],
-        services: [.init(name: "웹", ok: true, value: "56ms"), .init(name: "Redis", ok: true, value: nil),
+        services: [.init(name: "웹", ok: true, value: "56ms"), .init(name: "Redis", ok: true, value: nil), .init(name: "방문자", ok: true, value: "120", info: true),
                    .init(name: "DB", ok: true, value: nil), .init(name: "인터넷", ok: true, value: "7ms")],
         firing: 1, firing_names: ["웹 응답 느림"], relay_connections: 14,
         containers: [.init(name: "postgres", mem_mb: 1830), .init(name: "redis", mem_mb: 389),

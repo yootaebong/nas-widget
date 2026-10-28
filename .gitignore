@@ -3,3 +3,7 @@ Local.xcconfig
 build/
 xcuserdata/
 .DS_Store
+server/config.toml
+server/.env
+server/beszel_data/
+__pycache__/

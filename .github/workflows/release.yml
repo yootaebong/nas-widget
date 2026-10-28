@@ -1,0 +1,35 @@
+name: Release
+
+# v* 태그를 push 하면 Xcode 없이 받아 쓰는 NasWidget.zip 을 만들어 GitHub Releases 에 올린다.
+# 주소는 빌드에 넣지 않는다 — 받은 사람이 위젯 편집에서 넣는다.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: 프로젝트 생성
+        run: |
+          brew install xcodegen
+          : > Local.xcconfig
+          xcodegen generate
+      - name: 빌드 (arm64 + x86_64)
+        run: |
+          xcodebuild -project NasWidget.xcodeproj -scheme NasWidget -configuration Release \
+            -derivedDataPath build -destination 'generic/platform=macOS' \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO MARKETING_VERSION="${GITHUB_REF_NAME#v}" build -quiet
+      - name: 압축
+        run: ditto -c -k --keepParent build/Build/Products/Release/NasWidget.app NasWidget.zip
+      - name: 릴리스 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # 다시 돌리면 이미 있는 릴리스에 zip 만 바꿔 올린다
+        run: |
+          gh release create "$GITHUB_REF_NAME" NasWidget.zip --title "$GITHUB_REF_NAME" --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" NasWidget.zip --clobber

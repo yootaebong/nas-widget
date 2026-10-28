@@ -20,10 +20,12 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSUIElement</key>
-	<false/>
 	<key>DashboardURL</key>
 	<string>$(DASHBOARD_URL)</string>
+	<key>LSUIElement</key>
+	<false/>
+	<key>NASStatusToken</key>
+	<string>$(NAS_STATUS_TOKEN)</string>
 	<key>NASStatusURL</key>
 	<string>$(NAS_STATUS_URL)</string>
 	<key>NSAppTransportSecurity</key>

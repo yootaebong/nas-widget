@@ -1,18 +1,37 @@
 import SwiftUI
+import WidgetKit
+
+/// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그린다. 이 모드에선 .primary·.secondary 같은 계층 스타일 글자가
+/// 사라지고 구체 Color 를 준 글자만 보인다(1.10·1.11 맥북 실측). 그래서 단색일 땐 구체 색을 직접 준다.
+struct Ink: ViewModifier {
+    @Environment(\.widgetRenderingMode) var mode
+    var secondary = false
+    func body(content: Content) -> some View {
+        if mode == .fullColor {
+            content.foregroundStyle(secondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+        } else {
+            content.foregroundStyle(secondary ? Color.secondary : Color.white)
+        }
+    }
+}
+
+extension View {
+    func ink(secondary: Bool = false) -> some View { modifier(Ink(secondary: secondary)) }
+}
 
 struct Bar: View {
     var label: String
     var value: Int
     var body: some View {
         HStack(spacing: 6) {
-            Text(label).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 40, alignment: .leading)
+            Text(label).font(.system(size: 11)).ink(secondary: true).frame(width: 40, alignment: .leading)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
                     Capsule().fill(levelColor(value)).frame(width: g.size.width * CGFloat(min(value, 100)) / 100)
                 }
             }.frame(height: 6)
-            Text("\(value)%").font(.system(size: 11).monospacedDigit()).frame(width: 34, alignment: .trailing)
+            Text("\(value)%").font(.system(size: 11).monospacedDigit()).ink().frame(width: 34, alignment: .trailing)
         }
     }
 }
@@ -30,7 +49,7 @@ struct Metric: View {
     var color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+            Text(label).font(.system(size: 9)).ink(secondary: true).lineLimit(1)
             Text(text).font(.system(size: 13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.8)
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -51,7 +70,7 @@ struct SystemsView: View {
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Dot(ok: s.up)
-                        Text(s.name).font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(s.name).font(.system(size: 11, weight: .semibold)).ink().lineLimit(1).minimumScaleFactor(0.8)
                     }.frame(width: 72, alignment: .leading)
                     Metric(label: "CPU", value: s.cpu)
                     Metric(label: "메모리", value: s.mem)
@@ -72,7 +91,7 @@ struct ServiceRow: View {
     var body: some View {
         let neutral = info && ok
         HStack(spacing: 4) {
-            Text(name).font(.system(size: 11)).lineLimit(1)
+            Text(name).font(.system(size: 11)).ink().lineLimit(1)
             Spacer(minLength: 2)
             Dot(ok: ok, neutral: neutral)
             Text(text).font(.system(size: 11).monospacedDigit())
@@ -119,7 +138,7 @@ struct AlertBadge: View {
         if let n = status.firing, n == 0 {
             Text("알림 없음").font(.system(size: 10)).foregroundStyle(.green)
         } else if status.firing == nil {
-            Text("알림 모름").font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("알림 모름").font(.system(size: 10)).ink(secondary: true)
         }
     }
 }
@@ -129,13 +148,13 @@ struct ContainersView: View {
     var body: some View {
         if let cs = status.containers, !cs.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text("도커 메모리 상위").font(.system(size: 9)).foregroundStyle(.secondary)
+                Text("도커 메모리 상위").font(.system(size: 9)).ink(secondary: true)
                 HStack(spacing: 10) {
                     ForEach(cs) { c in
                         HStack(spacing: 3) {
                             Text(c.name)
-                                .font(.system(size: 11)).lineLimit(1)
-                            Text(memText(c.mem_mb)).font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .font(.system(size: 11)).ink().lineLimit(1)
+                            Text(memText(c.mem_mb)).font(.system(size: 11, weight: .semibold).monospacedDigit()).ink()
                         }
                     }
                 }
@@ -148,18 +167,18 @@ struct DiskRing: View {
     var system: NasStatus.System
     var body: some View {
         VStack(spacing: 6) {
-            HStack(spacing: 5) { Dot(ok: system.up); Text(system.name).font(.system(size: 12, weight: .semibold)); Spacer() }
+            HStack(spacing: 5) { Dot(ok: system.up); Text(system.name).font(.system(size: 12, weight: .semibold)).ink(); Spacer() }
             ZStack {
                 Circle().stroke(.quaternary, lineWidth: 9)
                 Circle().trim(from: 0, to: CGFloat(system.disk) / 100)
                     .stroke(levelColor(system.disk), style: StrokeStyle(lineWidth: 9, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
-                    Text("\(system.disk)%").font(.system(size: 22, weight: .bold).monospacedDigit())
-                    Text("디스크").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text("\(system.disk)%").font(.system(size: 22, weight: .bold).monospacedDigit()).ink()
+                    Text("디스크").font(.system(size: 10)).ink(secondary: true)
                 }
             }.padding(.horizontal, 10)
-            Text("CPU \(system.cpu)% · 메모리 \(system.mem)%" + (system.temp.map { " · \($0)°" } ?? "")).font(.system(size: 10)).foregroundStyle(.secondary)
+            Text("CPU \(system.cpu)% · 메모리 \(system.mem)%" + (system.temp.map { " · \($0)°" } ?? "")).font(.system(size: 10)).ink(secondary: true)
                 .lineLimit(1).minimumScaleFactor(0.75)
         }
     }

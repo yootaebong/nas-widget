@@ -12,8 +12,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.11"
-    CURRENT_PROJECT_VERSION: "12"
+    MARKETING_VERSION: "1.12"
+    CURRENT_PROJECT_VERSION: "13"
 targets:
   NasWidget:
     type: application

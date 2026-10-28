@@ -2,11 +2,28 @@ import SwiftUI
 import WidgetKit
 
 /// 글자 색(앱·위젯 공용). 창이 앞에 오면 맥은 위젯을 다시 그리지 않고 다 그린 그림에 단색 필터만 씌운다 — 어두운 색은 진하게,
-/// 밝은 색은 투명하게(1.12 맥북 색 시험). 그래서 위젯은 밝은 외관으로 고정하고(NasWidget) 여기선 계층 색만 쓴다.
+/// 밝은 색은 투명하게(1.12 맥북 색 시험). 다크 모드 위젯에서 흰 글자를 쓰면 필터에서 사라지므로 중간 회색을 준다.
+/// 앱 창은 필터가 없으니 계층 색 그대로.
 struct Ink: ViewModifier {
+    @Environment(\.colorScheme) var scheme
+    @Environment(\.inWidget) var inWidget
     var secondary = false
     func body(content: Content) -> some View {
-        content.foregroundStyle(secondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+        if inWidget && scheme == .dark {
+            content.foregroundStyle(Color(white: secondary ? 0.5 : 0.62))
+        } else {
+            content.foregroundStyle(secondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+        }
+    }
+}
+
+private struct InWidgetKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// 위젯 안에서 그리는 중인지. NasWidgetView 가 켠다.
+    var inWidget: Bool {
+        get { self[InWidgetKey.self] }
+        set { self[InWidgetKey.self] = newValue }
     }
 }
 

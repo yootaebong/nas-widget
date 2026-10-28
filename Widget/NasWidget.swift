@@ -62,6 +62,7 @@ struct Provider: AppIntentTimelineProvider {
 
 struct NasWidgetView: View {
     @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var scheme
     var entry: Entry
 
     var body: some View {
@@ -99,9 +100,9 @@ struct NasWidgetView: View {
                 }.ink(secondary: true)
             }
         }
-        // 단색 필터는 밝은 글자를 지운다 — 맥이 다크 모드여도 밝은 카드·검은 글자로 그린다.
-        .environment(\.colorScheme, .light)
-        .containerBackground(Color(white: 0.93), for: .widget)
+        // 시스템 외관을 따른다. 다크일 땐 글자를 중간 회색으로 그려 단색 필터에서도 남게 한다(Ink).
+        .environment(\.inWidget, true)
+        .containerBackground(scheme == .dark ? Color(white: 0.12) : Color(white: 0.93), for: .widget)
         .widgetURL(entry.dashboard)
     }
 

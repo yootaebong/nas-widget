@@ -11,17 +11,21 @@ struct SavedConfig: Codable, Equatable {
 
 enum SharedConfig {
     /// 샌드박스 안의 홈은 컨테이너라, 실제 홈은 계정 정보에서 읽는다. entitlements 의 예외 경로와 같아야 한다.
-    static var fileURL: URL {
-        let home = getpwuid(getuid()).map { String(cString: $0.pointee.pw_dir) } ?? NSHomeDirectory()
-        return URL(fileURLWithPath: home).appendingPathComponent("Library/Application Support/NasWidget/config.json")
+    /// 홈을 못 찾으면 nil — 컨테이너 홈으로 대신 쓰면 위젯이 못 읽는 곳에 조용히 저장된다.
+    static var fileURL: URL? {
+        var pw = passwd(), result: UnsafeMutablePointer<passwd>?
+        var buf = [CChar](repeating: 0, count: 4096)
+        guard getpwuid_r(getuid(), &pw, &buf, buf.count, &result) == 0, result != nil, let dir = pw.pw_dir else { return nil }
+        return URL(fileURLWithPath: String(cString: dir)).appendingPathComponent("Library/Application Support/NasWidget/config.json")
     }
 
     static func load() -> SavedConfig? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SavedConfig.self, from: data)
     }
 
     static func save(_ config: SavedConfig) throws {
+        guard let fileURL else { throw CocoaError(.fileNoSuchFile) }
         let dir = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])

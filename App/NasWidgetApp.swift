@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var status: NasStatus?
     @State private var error: String?
     @State private var saved = false
+    @State private var saveError: String?
 
     private var source: StatusSource { StatusSource(url: statusURL, token: token, dashboard: dashboardURL) }
 
@@ -40,6 +41,7 @@ struct ContentView: View {
                 Text(error ?? "불러오는 중…").foregroundStyle(.secondary)
             }
             Divider()
+            if let saveError { Text(saveError).font(.caption).foregroundStyle(.red) }
             Text(saved ? "저장됨 — 바탕화면 위젯이 이 주소를 씁니다." : "연결 시험이 통과하면 이 값을 위젯이 그대로 씁니다.")
                 .font(.caption).foregroundStyle(saved ? .green : .secondary)
             Text("위젯 추가: 바탕화면 우클릭 → 위젯 편집 → '서버 상태' 검색.\n위젯 편집 칸은 비워 두면 됩니다(넣으면 그 위젯만 그 값을 씁니다).")
@@ -62,26 +64,26 @@ struct ContentView: View {
     }
 
     func load() async {
+        // 시험한 값 그대로를 넘긴다 — 요청 중에 칸을 고쳐도 시험 안 한 값이 위젯으로 가지 않게
+        let tested = SavedConfig(statusURL: statusURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                                 token: token.trimmingCharacters(in: .whitespacesAndNewlines),
+                                 dashboardURL: dashboardURL.trimmingCharacters(in: .whitespacesAndNewlines))
         do {
             status = try await StatusClient.fetch(source); error = nil
-            saveForWidget()
-        } catch { status = nil; saved = false; self.error = "연결 못 함: \(error.localizedDescription)" }
+            saveForWidget(tested)
+        } catch { status = nil; saved = false; saveError = nil; self.error = "연결 못 함: \(error.localizedDescription)" }
     }
 
     /// 연결 시험을 통과한 값만 위젯에 넘긴다 — 틀린 값으로 위젯이 깨지지 않게
-    func saveForWidget() {
-        let c = SavedConfig(statusURL: statusURL.trimmingCharacters(in: .whitespacesAndNewlines),
-                            token: token.trimmingCharacters(in: .whitespacesAndNewlines),
-                            dashboardURL: dashboardURL.trimmingCharacters(in: .whitespacesAndNewlines))
+    func saveForWidget(_ c: SavedConfig) {
         guard !c.statusURL.isEmpty else { saved = false; return }
         do {
-            if SharedConfig.load() != c {
-                try SharedConfig.save(c)
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-            saved = true
+            if SharedConfig.load() != c { try SharedConfig.save(c) }
+            // 같은 값이어도 다시 그린다 — 서버가 살아난 뒤 시험하면 위젯 오류 표시도 바로 걷히게
+            WidgetCenter.shared.reloadAllTimelines()
+            saved = true; saveError = nil
         } catch {
-            saved = false; self.error = "위젯에 넘기지 못함: \(error.localizedDescription)"
+            saved = false; saveError = "위젯에 넘기지 못함: \(error.localizedDescription)"
         }
     }
 }

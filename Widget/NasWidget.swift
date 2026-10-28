@@ -65,13 +65,6 @@ struct NasWidgetView: View {
     @Environment(\.widgetRenderingMode) var renderingMode
     var entry: Entry
 
-    @Environment(\.colorScheme) var colorScheme
-
-    /// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그린다. 이 모드는 글자색의 밝기를 불투명도로 써서
-    /// 흰색은 진하게, 검정은 투명하게 나온다 — 라이트 모드의 기본 글자색(검정)인 이름·칸 제목이 사라졌다.
-    /// 단색일 때는 다크 모드 색을 써서 .primary(흰색)·.secondary·Color.secondary 가 모두 밝은 쪽으로 가게 한다.
-    private var scheme: ColorScheme { renderingMode == .fullColor ? colorScheme : .dark }
-
     var body: some View {
         Group {
             if let s = entry.status {
@@ -104,20 +97,19 @@ struct NasWidgetView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "wifi.exclamationmark").font(.title2)
                     Text(entry.error ?? "불러오는 중").font(.caption).multilineTextAlignment(.center)
-                }.foregroundStyle(.secondary)
+                }.ink(secondary: true)
             }
         }
-        .environment(\.colorScheme, scheme)
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(entry.dashboard)
     }
 
     func header(_ title: String, _ s: NasStatus) -> some View {
         HStack(spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            Text(title).font(.system(size: 11, weight: .semibold)).ink(secondary: true)
             AlertBadge(status: s)
             Spacer()
-            Text(entry.date, style: .time).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(entry.date, style: .time).font(.system(size: 11)).ink(secondary: true)
         }
     }
 }

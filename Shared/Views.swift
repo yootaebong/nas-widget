@@ -1,17 +1,12 @@
 import SwiftUI
 import WidgetKit
 
-/// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그린다. 이 모드에선 .primary·.secondary 같은 계층 스타일 글자가
-/// 사라지고 구체 Color 를 준 글자만 보인다(1.10·1.11 맥북 실측). 그래서 단색일 땐 구체 색을 직접 준다.
+/// 글자 색(앱·위젯 공용). 창이 앞에 오면 맥은 위젯을 다시 그리지 않고 다 그린 그림에 단색 필터만 씌운다 — 어두운 색은 진하게,
+/// 밝은 색은 투명하게(1.12 맥북 색 시험). 그래서 위젯은 밝은 외관으로 고정하고(NasWidget) 여기선 계층 색만 쓴다.
 struct Ink: ViewModifier {
-    @Environment(\.widgetRenderingMode) var mode
     var secondary = false
     func body(content: Content) -> some View {
-        if mode == .fullColor {
-            content.foregroundStyle(secondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-        } else {
-            content.foregroundStyle(secondary ? Color.secondary : Color.white)
-        }
+        content.foregroundStyle(secondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
     }
 }
 

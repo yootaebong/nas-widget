@@ -1,0 +1,67 @@
+# NAS 위젯 상태 서버 설정
+# 이 파일을 config.toml 로 복사해서 채운 뒤 `docker compose up -d` 하세요.
+# 쓰지 않는 구역([beszel]·[prometheus]·[[services]])은 통째로 지우거나 주석 처리하면 됩니다.
+
+# 위젯이 보낼 토큰. 위젯 설정의 "토큰" 칸에 같은 값을 넣습니다.
+# `Authorization: Bearer <토큰>` 또는 주소 끝 `?token=<토큰>` 둘 다 받습니다.
+# 꼭 채우세요 — 비어 있으면 서버가 뜨지 않습니다. 환경 변수 TOKEN 이 있으면 그 값이 우선합니다.
+# 만들기: openssl rand -hex 24
+# 프록시(Caddy·nginx) 뒤에 두면 ?token= 은 접근 로그에 남으니 Bearer 헤더를 쓰세요(위젯은 헤더로 보냅니다).
+token = ""
+
+# 토큰 없이 열기(내부망 전용일 때만). true 가 아니면 token 이 빈 채로는 서버가 뜨지 않습니다.
+# allow_no_token = true
+
+# 모은 결과를 몇 초 동안 재사용할지. 위젯은 5분마다 읽으니 기본 30초면 충분합니다.
+cache_seconds = 30
+
+
+# ----- 기기 수치: Beszel 허브 (https://github.com/henrygd/beszel) -----
+# CPU·메모리·디스크·온도와 Beszel 에서 울리는 알림을 가져옵니다.
+[beszel]
+# 허브 주소. compose.yaml 의 beszel 을 같이 띄웠다면 http://beszel:8090
+url = "http://beszel:8090"
+# 허브 로그인 계정. 이 계정에 붙은 기기·알림만 보입니다 — 기기를 등록한 그 계정을 쓰세요.
+email = "you@example.com"
+# 비밀번호. 파일에 두기 싫으면 비워 두고 환경 변수 BESZEL_PASSWORD 로 넣으세요(그 값이 우선).
+password = ""
+# 위젯에 보일 기기 순서(Beszel 에 등록한 이름). 여기 없는 기기는 Beszel 순서대로 뒤에 붙습니다.
+# 작은 위젯은 첫 기기의 디스크를 그립니다.
+order = ["NAS", "맥북"]
+
+
+# ----- Prometheus (선택) -----
+# 있으면 ALERTS{alertstate="firing"} 알림을 더하고, prometheus 서비스 확인과 컨테이너 메모리에 씁니다.
+# [prometheus]
+# url = "http://prometheus:9090"
+# # true 면 cAdvisor 지표(container_memory_working_set_bytes)로 메모리 상위 3개 컨테이너를 보여 줍니다.
+# containers = true
+
+
+# ----- 서비스 확인 -----
+# [[services]] 하나가 위젯의 서비스 한 줄입니다. name 과 아래 셋 중 하나를 씁니다.
+#   http = "주소"        GET 해서 응답 코드가 400 미만이면 정상, 걸린 시간을 "56ms" 처럼 표시
+#   tcp = "호스트:포트"   접속되면 정상, 걸린 시간 표시
+#   prometheus = "쿼리"   결과가 1 이면 정상
+# 공통 선택 키:
+#   timeout = 5          http·tcp 제한 시간(초, 기본 5)
+# http 전용:
+#   insecure = true      TLS 인증서 검증을 끕니다(자체 서명 인증서용)
+# prometheus 전용:
+#   prometheus_value = "쿼리"   정상일 때 옆에 보일 값
+#   unit = "ms"                 값이 초 단위면 "ms" 로 ms 문자열로 바꿉니다. 다른 글자는 값 뒤에 그대로 붙습니다.
+
+[[services]]
+name = "웹"
+http = "https://example.com"
+timeout = 5
+
+[[services]]
+name = "DB"
+tcp = "192.168.0.10:5432"
+
+# [[services]]
+# name = "인터넷"
+# prometheus = 'max(probe_success{job="ping"})'
+# prometheus_value = 'min(probe_icmp_duration_seconds{job="ping",phase="rtt"})'
+# unit = "ms"

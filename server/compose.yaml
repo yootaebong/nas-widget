@@ -1,10 +1,12 @@
-# 사용법: cp config.example.toml config.toml 로 채운 뒤 `docker compose up -d`
-# 위젯 상태 주소: http://<이 서버 IP>:8080/status
+# 사용법: cp config.example.toml config.toml · cp .env.example .env 로 채운 뒤 `docker compose up -d`
+# 위젯 상태 주소: http://<LISTEN_IP>:8080/status
 services:
   nas-widget-server:
     build: .
     ports:
-      - "8080:8080"
+      # 도커는 방화벽(ufw 등)을 우회해 포트를 열므로 모든 네트워크(0.0.0.0)에 열지 않는다.
+      # .env 의 LISTEN_IP(이 서버의 내부망 또는 Tailscale IP)에만 연다.
+      - "${LISTEN_IP:?.env 에 LISTEN_IP(이 서버의 내부망 또는 Tailscale IP)를 넣으세요}:8080:8080"
     volumes:
       - ./config.toml:/config/config.toml:ro
     # 비밀값을 파일 대신 환경 변수로 넣으려면 주석을 풀고 .env 에 적으세요.
@@ -20,7 +22,7 @@ services:
   # config.toml 의 [beszel] url 을 그 주소로 바꾸세요.
   # 각 기기에는 Beszel 에이전트를 따로 설치합니다(허브 화면의 "시스템 추가" 안내 참고).
   beszel:
-    image: henrygd/beszel:latest
+    image: henrygd/beszel:0.21.1
     ports:
       # 처음 들어온 사람이 관리자 계정을 만들므로 이 기기에서만 열어 둡니다.
       # 다른 기기에서 열려면 127.0.0.1 을 이 서버의 내부망·Tailscale IP 로 바꾸세요.

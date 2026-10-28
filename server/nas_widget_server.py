@@ -1,9 +1,9 @@
-"""NAS 위젯 상태 서버.
+"""서버 상태 위젯의 상태 서버.
 
 Beszel 허브·Prometheus·HTTP/TCP 확인 결과를 모아 macOS 위젯이 읽는 상태 JSON 하나로 내려준다.
 Python 3.12 표준 라이브러리만 쓴다.
 
-  GET /status  상태 JSON (설정 token 이 있으면 Bearer 또는 ?token= 필요)
+  GET /status  상태 JSON (설정 token 이 있으면 Bearer 헤더 필요, ?token= 은 allow_query_token = true 일 때만)
   GET /health  "ok" (인증 없음)
 """
 
@@ -38,6 +38,9 @@ SERVICE_WORKERS = 12
 BYTES_PER_MB = 1048576
 CONTAINERS_QUERY = 'topk(3, sum by (name)(container_memory_working_set_bytes{name!=""}))'
 PROM_ALERTS_QUERY = 'ALERTS{alertstate="firing"}'
+DEFAULT_MAX_CONNECTIONS = 32  # 동시에 붙잡을 수 있는 연결 수. 넘으면 바로 닫는다(env MAX_CONNECTIONS)
+REQUEST_TIMEOUT = 10  # 소켓 읽기 한 번의 제한 시간(초)
+HEADER_DEADLINE_SECONDS = 15.0  # 요청 줄+헤더를 다 받기까지의 총 제한 시간(1바이트씩 흘리는 연결 차단)
 
 log = logging.getLogger("nas-widget-server")
 
@@ -50,11 +53,22 @@ class HttpStatusError(Exception):
         self.code = code
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """리다이렉트를 따라가지 않는다 — Beszel 토큰·비밀번호가 다른 주소로 넘어가지 않게. 3xx 는 HTTPError 로 올라온다."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        return None
+
+
+_SOURCE_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def http_json(url: str, headers: dict[str, str] | None = None, data: bytes | None = None,
               timeout: float = SOURCE_TIMEOUT) -> Any:
+    """Beszel·Prometheus 요청. 리다이렉트는 따라가지 않고 HttpStatusError(3xx) 로 낸다."""
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _SOURCE_OPENER.open(req, timeout=timeout) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
         e.close()
@@ -329,12 +343,40 @@ class Collector:
 
 # ---------- HTTP ----------
 
-def make_handler(collector: Collector, token: str) -> type[BaseHTTPRequestHandler]:
+def make_handler(collector: Collector, token: str, allow_query_token: bool = False) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "nas-widget-server/1"
         sys_version = ""
         # 요청 줄을 안 보내고 붙잡고 있는 연결은 10초 뒤 끊는다
-        timeout = 10
+        timeout = REQUEST_TIMEOUT
+
+        def setup(self) -> None:
+            super().setup()
+            # 소켓 timeout 은 읽기 한 번 기준이라, 1바이트씩 흘리면 끝없이 붙잡힌다 → 헤더까지 총 시간으로 끊는다
+            self._deadline_passed = False
+            self._header_timer = threading.Timer(HEADER_DEADLINE_SECONDS, self._header_deadline_passed)
+            self._header_timer.daemon = True
+            self._header_timer.start()
+
+        def _header_deadline_passed(self) -> None:
+            self._deadline_passed = True
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+        def parse_request(self) -> bool:
+            ok = super().parse_request()  # 여기서 헤더까지 다 읽는다
+            self._header_timer.cancel()
+            if self._deadline_passed:
+                # 끊기 전까지 받은 조각은 처리하지 않는다(응답도 보내지 않음)
+                self.close_connection = True
+                return False
+            return ok
+
+        def finish(self) -> None:
+            self._header_timer.cancel()
+            super().finish()
 
         def _send(self, code: int, body: bytes, ctype: str) -> None:
             self.send_response(code)
@@ -350,6 +392,8 @@ def make_handler(collector: Collector, token: str) -> type[BaseHTTPRequestHandle
             header = self.headers.get("Authorization", "")
             if header.startswith("Bearer ") and hmac.compare_digest(header[7:].strip().encode(), token.encode()):
                 return True
+            if not allow_query_token:
+                return False
             given = (query.get("token") or [""])[0]
             return bool(given) and hmac.compare_digest(given.encode(), token.encode())
 
@@ -380,8 +424,45 @@ def make_handler(collector: Collector, token: str) -> type[BaseHTTPRequestHandle
     return Handler
 
 
+def max_connections_from_env() -> int:
+    raw = os.environ.get("MAX_CONNECTIONS", "")
+    try:
+        n = int(raw) if raw else DEFAULT_MAX_CONNECTIONS
+    except ValueError:
+        log.warning("MAX_CONNECTIONS=%r 가 숫자가 아니라 기본 %d 을 씁니다", raw, DEFAULT_MAX_CONNECTIONS)
+        return DEFAULT_MAX_CONNECTIONS
+    return max(n, 1)
+
+
 class Server(ThreadingHTTPServer):
-    """HTTPServer.server_bind 의 socket.getfqdn 역방향 DNS 조회를 건너뛴다(DNS 가 느린 환경에서 기동이 수십 초 걸림)."""
+    """동시 연결 수를 세마포어로 묶은 스레드 서버.
+
+    server_bind 는 HTTPServer 의 socket.getfqdn 역방향 DNS 조회를 건너뛴다(DNS 가 느린 환경에서 기동이 수십 초 걸림).
+    """
+
+    def __init__(self, server_address: tuple[str, int], handler: type[BaseHTTPRequestHandler],
+                 max_connections: int | None = None) -> None:
+        self.max_connections = max_connections or max_connections_from_env()
+        self._slots = threading.BoundedSemaphore(self.max_connections)
+        super().__init__(server_address, handler)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._slots.acquire(blocking=False):
+            log.warning("동시 연결 %d개를 넘어 %s 연결을 닫습니다", self.max_connections, client_address[0])
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            # 스레드를 못 띄웠으면 process_request_thread 가 안 돌므로 여기서 돌려준다
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
     def server_bind(self) -> None:
         socketserver.TCPServer.server_bind(self)
@@ -397,7 +478,10 @@ def make_server(cfg: Json, host: str = "0.0.0.0", port: int = DEFAULT_PORT) -> S
     collector = Collector(cfg)
     if not collector.beszel.configured and cfg.get("beszel"):
         log.warning("[beszel] url·email·password 중 빠진 값이 있어 기기 수치를 건너뜁니다")
-    return Server((host, port), make_handler(collector, token))
+    allow_query_token = cfg.get("allow_query_token") is True
+    if allow_query_token:
+        log.warning("allow_query_token = true — ?token= 은 프록시·브라우저 기록에 남을 수 있습니다")
+    return Server((host, port), make_handler(collector, token, allow_query_token))
 
 
 def main() -> None:

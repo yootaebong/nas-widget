@@ -12,8 +12,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.5"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "1.6"
+    CURRENT_PROJECT_VERSION: "7"
 targets:
   NasWidget:
     type: application
@@ -22,14 +22,14 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: NAS 위젯
+        CFBundleDisplayName: 서버 상태 위젯
         LSUIElement: false
         NASStatusURL: $(NAS_STATUS_URL)
         NASStatusToken: $(NAS_STATUS_TOKEN)
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}
+        NSAppTransportSecurity: {NSAllowsLocalNetworking: true}
     entitlements:
       path: App/App.entitlements
       properties:
@@ -44,13 +44,13 @@ targets:
     info:
       path: Widget/Info.plist
       properties:
-        CFBundleDisplayName: NAS 위젯
+        CFBundleDisplayName: 서버 상태 위젯
         NASStatusURL: $(NAS_STATUS_URL)
         NASStatusToken: $(NAS_STATUS_TOKEN)
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}
+        NSAppTransportSecurity: {NSAllowsLocalNetworking: true}
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

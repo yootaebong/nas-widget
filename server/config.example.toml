@@ -1,13 +1,17 @@
-# NAS 위젯 상태 서버 설정
+# 서버 상태 위젯 — 상태 서버 설정
 # 이 파일을 config.toml 로 복사해서 채운 뒤 `docker compose up -d` 하세요.
 # 쓰지 않는 구역([beszel]·[prometheus]·[[services]])은 통째로 지우거나 주석 처리하면 됩니다.
 
 # 위젯이 보낼 토큰. 위젯 설정의 "토큰" 칸에 같은 값을 넣습니다.
-# `Authorization: Bearer <토큰>` 또는 주소 끝 `?token=<토큰>` 둘 다 받습니다.
+# `Authorization: Bearer <토큰>` 헤더로 받습니다(위젯은 헤더로 보냅니다).
 # 꼭 채우세요 — 비어 있으면 서버가 뜨지 않습니다. 환경 변수 TOKEN 이 있으면 그 값이 우선합니다.
 # 만들기: openssl rand -hex 24
-# 프록시(Caddy·nginx) 뒤에 두면 ?token= 은 접근 로그에 남으니 Bearer 헤더를 쓰세요(위젯은 헤더로 보냅니다).
 token = ""
+
+# 주소 끝 `?token=<토큰>` 로도 받기(기본 false — 헤더만 받음).
+# 쿼리의 토큰은 프록시(Caddy·nginx) 접근 로그·브라우저 기록에 그대로 남아 새기 쉽습니다.
+# 헤더를 못 넣는 도구(브라우저 주소창 등)로 볼 때만 켜세요.
+# allow_query_token = true
 
 # 토큰 없이 열기(내부망 전용일 때만). true 가 아니면 token 이 빈 채로는 서버가 뜨지 않습니다.
 # allow_no_token = true
@@ -27,7 +31,7 @@ email = "you@example.com"
 password = ""
 # 위젯에 보일 기기 순서(Beszel 에 등록한 이름). 여기 없는 기기는 Beszel 순서대로 뒤에 붙습니다.
 # 작은 위젯은 첫 기기의 디스크를 그립니다.
-order = ["NAS", "맥북"]
+order = ["중앙 서버", "맥북"]
 
 
 # ----- Prometheus (선택) -----

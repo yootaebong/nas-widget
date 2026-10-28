@@ -41,6 +41,8 @@ PROM_ALERTS_QUERY = 'ALERTS{alertstate="firing"}'
 DEFAULT_MAX_CONNECTIONS = 32  # 동시에 붙잡을 수 있는 연결 수. 넘으면 바로 닫는다(env MAX_CONNECTIONS)
 REQUEST_TIMEOUT = 10  # 소켓 읽기 한 번의 제한 시간(초)
 HEADER_DEADLINE_SECONDS = 15.0  # 요청 줄+헤더를 다 받기까지의 총 제한 시간(1바이트씩 흘리는 연결 차단)
+JSON_MAX_BYTES = 1048576  # json 확인이 읽을 응답 최대 크기
+VALUE_MAX_CHARS = 24  # 위젯 한 줄에 보일 값 글자 수
 
 log = logging.getLogger("nas-widget-server")
 
@@ -258,21 +260,132 @@ def check_prometheus(prom: Prometheus, svc: Json) -> Json:
     return out
 
 
+def fetch_json(url: str, headers: dict[str, str], timeout: float) -> Any:
+    """json 확인용 GET. 리다이렉트는 따라가지 않는다(headers 의 API 키가 다른 주소로 넘어가지 않게)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "nas-widget-server/1", "Accept": "application/json",
+                                               **headers})
+    try:
+        with _SOURCE_OPENER.open(req, timeout=timeout) as r:
+            data = r.read(JSON_MAX_BYTES + 1)
+    except urllib.error.HTTPError as e:
+        e.close()
+        raise HttpStatusError(e.code) from e
+    if len(data) > JSON_MAX_BYTES:
+        raise ValueError("응답이 1MB 를 넘습니다")
+    return json.loads(data)
+
+
+def json_path(obj: Any, path: str) -> Any:
+    """"data.items.0.count" 처럼 점으로 이은 경로를 따라 내려간다. 숫자 칸은 목록 번호."""
+    for key in [k for k in path.split(".") if k]:
+        if isinstance(obj, list):
+            obj = obj[int(key)]
+        elif isinstance(obj, dict):
+            obj = obj[key]
+        else:
+            raise KeyError(key)
+    return obj
+
+
+def show_number(v: float) -> str:
+    """1,234 · 12.5 · 0.0071 처럼. 지수 표기 없이, 너무 길면 유효 숫자 3자리로."""
+    if v == int(v) and abs(v) < 1e15:
+        text = f"{int(v):,}"
+    else:
+        text = f"{v:,.2f}" if abs(v) >= 1 else f"{v:.4f}"
+        text = text.rstrip("0").rstrip(".")
+    return text if len(text) <= 16 else f"{v:.3g}"
+
+
+def show_value(v: Any, unit: str) -> str:
+    if isinstance(v, bool):
+        text = "예" if v else "아니오"
+    elif isinstance(v, (int, float)):
+        text = ms(v) if unit == "ms" else show_number(v) + unit
+    elif v is None:
+        text = "-"
+    elif isinstance(v, (dict, list)):
+        text = json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+    else:
+        text = f"{v}{unit}"
+    return text[:VALUE_MAX_CHARS]
+
+
+def judge(svc: Json, v: Any) -> bool | None:
+    """min·max 가 있으면 범위 안이면 True, 밖이면 False. 둘 다 없으면 None(판정 없는 값 줄)."""
+    lo, hi = svc.get("min"), svc.get("max")
+    if lo is None and hi is None:
+        return None
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return False
+    return (lo is None or v >= lo) and (hi is None or v <= hi)
+
+
+def value_line(svc: Json, v: Any) -> Json:
+    """값 줄: 판정이 없으면 info(회색), min·max 가 있으면 범위로 초록·빨강. 옛 위젯은 info 를 몰라 ok 로만 그린다."""
+    ok = judge(svc, v)
+    out: Json = {"ok": True if ok is None else ok, "value": show_value(v, str(svc.get("unit", "")))}
+    if ok is None:
+        out["info"] = True
+    return out
+
+
+def check_json(svc: Json, timeout: float) -> Json:
+    headers = {str(k): str(v) for k, v in (svc.get("headers") or {}).items()}
+    return value_line(svc, json_path(fetch_json(str(svc["json"]), headers, timeout), str(svc.get("path", ""))))
+
+
+def check_prometheus_value(prom: Prometheus, svc: Json) -> Json:
+    if not prom.configured:
+        raise RuntimeError("[prometheus] url 이 없습니다")
+    v = prom.scalar(str(svc["prometheus_value"]))
+    if v is None:
+        raise ValueError("쿼리 결과가 비었습니다")
+    return value_line(svc, v)
+
+
+SERVICE_KINDS = ("http", "tcp", "json", "prometheus", "prometheus_value")  # 앞의 것이 먼저(둘 이상 적으면)
+VALUE_KINDS = ("json", "prometheus_value")
+
+
+def service_kind(svc: Json) -> str | None:
+    return next((k for k in SERVICE_KINDS if k in svc), None)
+
+
+def validate_services(services: list[Json]) -> None:
+    """설정 실수는 "못 읽음" 으로 숨기지 않고 뜰 때 알린다."""
+    for svc in services:
+        for key in ("min", "max"):
+            v = svc.get(key)
+            if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+                sys.exit(f"서비스 {svc.get('name', '?')} 의 {key} 는 따옴표 없는 숫자여야 합니다: {key} = {v!r}")
+
+
 def check_service(svc: Json, prom: Prometheus) -> Json:
     name = str(svc.get("name", "?"))
     timeout = float(svc.get("timeout", DEFAULT_SERVICE_TIMEOUT))
+    kind = service_kind(svc)
     try:
-        if "http" in svc:
+        if kind == "http":
             res = check_http(str(svc["http"]), timeout, bool(svc.get("insecure", False)))
-        elif "tcp" in svc:
+        elif kind == "tcp":
             res = check_tcp(str(svc["tcp"]), timeout)
-        elif "prometheus" in svc:
+        elif kind == "json":
+            res = check_json(svc, timeout)
+        elif kind == "prometheus":
             res = check_prometheus(prom, svc)
+        elif kind == "prometheus_value":
+            res = check_prometheus_value(prom, svc)
         else:
-            raise ValueError("http·tcp·prometheus 중 하나가 필요합니다")
+            raise ValueError("http·tcp·json·prometheus·prometheus_value 중 하나가 필요합니다")
     except Exception as e:
         log.info("서비스 %s 실패: %r", name, e)
         res = {"ok": False}
+        if kind in VALUE_KINDS:
+            res["info"] = True  # 값 줄은 "죽음" 대신 "못 읽음" 으로 보인다
     return {"name": name, **res}
 
 
@@ -284,6 +397,7 @@ class Collector:
         self.beszel = Beszel(cfg.get("beszel") or {})
         self.prom = Prometheus(cfg.get("prometheus") or {})
         self.services: list[Json] = list(cfg.get("services") or [])
+        validate_services(self.services)
         self.cache_seconds = float(cfg.get("cache_seconds", DEFAULT_CACHE_SECONDS))
         self._cached: tuple[float, Json] | None = None
         self._lock = threading.Lock()

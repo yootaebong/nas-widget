@@ -43,10 +43,17 @@ order = ["중앙 서버", "맥북"]
 
 
 # ----- 서비스 확인 -----
-# [[services]] 하나가 위젯의 서비스 한 줄입니다. name 과 아래 셋 중 하나를 씁니다.
+# [[services]] 하나가 위젯의 서비스 한 줄입니다. name 과 아래 중 하나를 씁니다.
+# 도커 안에서 돌므로 localhost·127.0.0.1 은 이 컨테이너 자신입니다 — 이 서버의 것도 집 안 IP 로 적으세요.
 #   http = "주소"        GET 해서 응답 코드가 400 미만이면 정상, 걸린 시간을 "56ms" 처럼 표시
 #   tcp = "호스트:포트"   접속되면 정상, 걸린 시간 표시
 #   prometheus = "쿼리"   결과가 1 이면 정상
+# 값 줄(판정 없이 값을 회색으로, 못 읽으면 빨강 "못 읽음"):
+#   json = "주소"  + path = "data.items.0.count"   JSON 응답에서 점으로 이은 칸의 값(목록은 0부터 번호)
+#                    headers = { Authorization = "Bearer ..." }  필요하면 요청 헤더(리다이렉트는 따라가지 않음)
+#   prometheus_value = "쿼리"   (prometheus 없이 이것만 쓰면) 쿼리 값
+#   min = 숫자 · max = 숫자     값 줄에 기준을 두면 범위 안은 초록·밖은 빨강으로 판정
+#   unit = "명"                 값 뒤에 붙일 글자("ms" 면 초 값을 ms 로)
 # 공통 선택 키:
 #   timeout = 5          http·tcp 제한 시간(초, 기본 5)
 # http 전용:
@@ -63,6 +70,12 @@ timeout = 5
 [[services]]
 name = "DB"
 tcp = "192.168.0.10:5432"
+
+# [[services]]
+# name = "방문자"
+# json = "http://192.168.0.10:3000/api/stats"
+# path = "data.visitors"
+# unit = "명"
 
 # [[services]]
 # name = "인터넷"

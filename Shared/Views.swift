@@ -19,7 +19,8 @@ struct Bar: View {
 
 struct Dot: View {
     var ok: Bool
-    var body: some View { Circle().fill(ok ? Color.green : Color.red).frame(width: 7, height: 7) }
+    var neutral = false
+    var body: some View { Circle().fill(neutral ? Color.secondary : ok ? Color.green : Color.red).frame(width: 7, height: 7) }
 }
 
 /// 위 칸 이름, 아래 숫자(수준별 색). 기기 줄의 한 칸.
@@ -66,12 +67,16 @@ struct ServiceRow: View {
     var name: String
     var ok: Bool
     var text: String
+    /// 판정 없는 값 줄 — 정상이면 회색으로 값만 보인다
+    var info = false
     var body: some View {
+        let neutral = info && ok
         HStack(spacing: 4) {
             Text(name).font(.system(size: 11)).lineLimit(1)
             Spacer(minLength: 2)
-            Dot(ok: ok)
-            Text(text).font(.system(size: 11).monospacedDigit()).foregroundStyle(ok ? Color.green : Color.red).lineLimit(1)
+            Dot(ok: ok, neutral: neutral)
+            Text(text).font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(neutral ? Color.secondary : ok ? Color.green : Color.red).lineLimit(1)
         }
     }
 }
@@ -82,7 +87,8 @@ struct ServicesView: View {
     var body: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: columns), alignment: .leading, spacing: 5) {
             ForEach(status.services) { s in
-                ServiceRow(name: s.name, ok: s.ok, text: s.ok ? (s.value ?? "정상") : "죽음")
+                let info = s.info ?? false
+                ServiceRow(name: s.name, ok: s.ok, text: s.value ?? (s.ok ? "정상" : info ? "못 읽음" : "죽음"), info: info)
             }
             if let n = status.relay_connections {
                 ServiceRow(name: "relay 연결", ok: n > 0, text: "\(n)개")

@@ -232,9 +232,9 @@ enum StatusClient {
 }
 
 func levelColor(_ v: Int) -> Color {
-    v >= 90 ? .red : v >= 70 ? .yellow : .green
+    v >= 90 ? .red : v >= 70 ? .orange : .green
 }
 
 func tempColor(_ v: Int) -> Color {
-    v >= 90 ? .red : v >= 75 ? .yellow : .green
+    v >= 90 ? .red : v >= 75 ? .orange : .green
 }

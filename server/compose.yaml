@@ -24,9 +24,9 @@ services:
   beszel:
     image: henrygd/beszel:0.21.1
     ports:
-      # 처음 들어온 사람이 관리자 계정을 만들므로 이 기기에서만 열어 둡니다.
-      # 다른 기기에서 열려면 127.0.0.1 을 이 서버의 집 안 IP 로 바꾸세요.
-      - "127.0.0.1:8090:8090"
+      # 처음 들어온 사람이 관리자 계정을 만들므로 기본은 이 기기에서만 엽니다.
+      # 계정을 만든 뒤 윈도우·휴대폰 브라우저에서도 보려면 .env 의 BESZEL_LISTEN_IP 를 집 안 IP 로.
+      - "${BESZEL_LISTEN_IP:-127.0.0.1}:8090:8090"
     volumes:
       - ./beszel_data:/beszel_data
     restart: unless-stopped

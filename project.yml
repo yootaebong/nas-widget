@@ -12,8 +12,8 @@ settings:
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.7"
-    CURRENT_PROJECT_VERSION: "8"
+    MARKETING_VERSION: "1.8"
+    CURRENT_PROJECT_VERSION: "9"
 targets:
   NasWidget:
     type: application
@@ -29,7 +29,7 @@ targets:
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSAppTransportSecurity: {NSAllowsLocalNetworking: true}
+        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}  # http 막기는 앱의 isPlainHTTPToPublic 이 한다(ATS 로컬 허용은 Tailscale 100.x 를 막음)
     entitlements:
       path: App/App.entitlements
       properties:
@@ -50,7 +50,7 @@ targets:
         DashboardURL: $(DASHBOARD_URL)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        NSAppTransportSecurity: {NSAllowsLocalNetworking: true}
+        NSAppTransportSecurity: {NSAllowsArbitraryLoads: true}  # http 막기는 앱의 isPlainHTTPToPublic 이 한다(ATS 로컬 허용은 Tailscale 100.x 를 막음)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

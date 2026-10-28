@@ -57,7 +57,7 @@ class HttpStatusError(Exception):
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """리다이렉트를 따라가지 않는다 — Beszel 토큰·비밀번호가 다른 주소로 넘어가지 않게. 3xx 는 HTTPError 로 올라온다."""
+    """리다이렉트를 따라가지 않는다 — Beszel·Grafana 토큰·비밀번호가 다른 주소로 넘어가지 않게. 3xx 는 HTTPError 로 올라온다."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         return None
@@ -68,7 +68,7 @@ _SOURCE_OPENER = urllib.request.build_opener(_NoRedirect)
 
 def http_json(url: str, headers: dict[str, str] | None = None, data: bytes | None = None,
               timeout: float = SOURCE_TIMEOUT) -> Any:
-    """Beszel·Prometheus 요청. 리다이렉트는 따라가지 않고 HttpStatusError(3xx) 로 낸다."""
+    """Beszel·Prometheus·Grafana 요청. 리다이렉트는 따라가지 않고 HttpStatusError(3xx) 로 낸다."""
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})})
     try:
         with _SOURCE_OPENER.open(req, timeout=timeout) as r:
@@ -207,7 +207,7 @@ class Grafana:
             auth = "Basic " + base64.b64encode(f"{self.user}:{self.password}".encode()).decode()
         res = http_json(self.url + "/api/prometheus/grafana/api/v1/alerts", {"Authorization": auth})
         return [a.get("labels", {}).get("alertname", "알림") for a in res["data"]["alerts"]
-                if str(a.get("state", "")).lower().startswith("alerting")]
+                if str(a.get("state", "")).lower().startswith(("alerting", "recovering"))]  # recovering 도 아직 울리는 중
 
 
 # ---------- Prometheus ----------
@@ -623,6 +623,8 @@ def make_server(cfg: Json, host: str = "0.0.0.0", port: int = DEFAULT_PORT) -> S
     collector = Collector(cfg)
     if not collector.beszel.configured and cfg.get("beszel"):
         log.warning("[beszel] url·email·password 중 빠진 값이 있어 기기 수치를 건너뜁니다")
+    if not collector.grafana.configured and cfg.get("grafana"):
+        log.warning("[grafana] url 과 token(또는 password) 이 있어야 Grafana 알림을 읽습니다 — 건너뜁니다")
     allow_query_token = cfg.get("allow_query_token") is True
     if allow_query_token:
         log.warning("allow_query_token = true — ?token= 은 프록시·브라우저 기록에 남을 수 있습니다")

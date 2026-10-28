@@ -1,6 +1,6 @@
 # 서버 상태 위젯 — 상태 서버 설정
 # 이 파일을 config.toml 로 복사해서 채운 뒤 `docker compose up -d` 하세요.
-# 쓰지 않는 구역([beszel]·[prometheus]·[[services]])은 통째로 지우거나 주석 처리하면 됩니다.
+# 쓰지 않는 구역([beszel]·[prometheus]·[grafana]·[[services]])은 통째로 지우거나 주석 처리하면 됩니다.
 
 # 위젯이 보낼 토큰. 위젯 설정의 "토큰" 칸에 같은 값을 넣습니다.
 # `Authorization: Bearer <토큰>` 헤더로 받습니다(위젯은 헤더로 보냅니다).

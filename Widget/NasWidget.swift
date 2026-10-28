@@ -65,10 +65,12 @@ struct NasWidgetView: View {
     @Environment(\.widgetRenderingMode) var renderingMode
     var entry: Entry
 
-    /// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그리는데, 기본 글자색(이름·칸 제목)은
-    /// 밝은 바탕에 흰색으로 나와 사라진다. 색을 직접 정한 숫자는 보이므로 기본 글자색도 직접 정한다
-    /// (.secondary 는 이 색을 옅게 따라간다).
-    private var ink: AnyShapeStyle { renderingMode == .fullColor ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.black) }
+    @Environment(\.colorScheme) var colorScheme
+
+    /// 다른 창이 앞에 있으면 맥이 위젯을 단색(vibrant)으로 그린다. 이 모드는 글자색의 밝기를 불투명도로 써서
+    /// 흰색은 진하게, 검정은 투명하게 나온다 — 라이트 모드의 기본 글자색(검정)인 이름·칸 제목이 사라졌다.
+    /// 단색일 때는 다크 모드 색을 써서 .primary(흰색)·.secondary·Color.secondary 가 모두 밝은 쪽으로 가게 한다.
+    private var scheme: ColorScheme { renderingMode == .fullColor ? colorScheme : .dark }
 
     var body: some View {
         Group {
@@ -105,7 +107,7 @@ struct NasWidgetView: View {
                 }.foregroundStyle(.secondary)
             }
         }
-        .foregroundStyle(ink)
+        .environment(\.colorScheme, scheme)
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(entry.dashboard)
     }

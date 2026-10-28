@@ -57,29 +57,89 @@ func webURL(_ text: String?) -> URL? {
     return u
 }
 
-/// 집 안·Tailscale 처럼 밖으로 안 나가는 주소인지. 이런 곳만 http(암호화 없음)로 읽는다.
-func isLocalHost(_ host: String?) -> Bool {
-    guard var h = host?.lowercased(), !h.isEmpty else { return false }
-    if h.hasPrefix("[") { h = String(h.dropFirst().dropLast()) }
-    if h.hasSuffix(".") { h = String(h.dropLast()) }
-    // 16843009·0x01010101 처럼 정수 하나로 쓴 IP 는 공개 주소일 수 있다
-    if h.hasPrefix("0x") || h.allSatisfy(\.isNumber) { return false }
-    // ATS 는 모두 허용(NSAllowsArbitraryLoads)이라 http 를 막는 곳은 여기뿐이다.
-    // (NSAllowsLocalNetworking 은 Tailscale 100.x 를 내부망으로 안 쳐 -1022 로 막는다 — 2026-10-28 실측)
-    if h == "localhost" || !h.contains(".") && !h.contains(":") || h.hasSuffix(".local") { return true }
-    let p = h.split(separator: ".").compactMap { $0.allSatisfy(\.isNumber) ? UInt8($0) : nil }
-    if p.count == 4 && h.split(separator: ".").count == 4 {
-        return p[0] == 10 || p[0] == 127
-            || (p[0] == 172 && (16...31).contains(p[1]))
-            || (p[0] == 192 && p[1] == 168)
-            || (p[0] == 169 && p[1] == 254)
-            || (p[0] == 100 && (64...127).contains(p[1]))  // Tailscale
-    }
-    if h.contains(":") {  // IPv6: 루프백·사설(fc00::/7)·링크 로컬(fe80::/10)
-        return h == "::1" || h.hasPrefix("fc") || h.hasPrefix("fd") || h.hasPrefix("fe8") || h.hasPrefix("fe9")
-            || h.hasPrefix("fea") || h.hasPrefix("feb")
+/// IP 글자면 그 바이트(IPv4 4개·IPv6 16개), 아니면 nil. inet_pton 은 10진 점 4개만 IPv4 로 받는다.
+func ipBytes(_ host: String) -> [UInt8]? {
+    var v4 = in_addr()
+    if inet_pton(AF_INET, host, &v4) == 1 { return withUnsafeBytes(of: &v4) { Array($0) } }
+    var v6 = in6_addr()
+    if inet_pton(AF_INET6, host, &v6) == 1 { return withUnsafeBytes(of: &v6) { Array($0) } }
+    return nil
+}
+
+/// 이 맥의 네트워크 장치에 100.64/10 주소가 있나 — Tailscale 이 켜져 있다는 뜻.
+/// 없으면 100.x 는 통신사 CGNAT 망일 수 있어 내부로 치지 않는다.
+func hasCGNATInterface() -> Bool {
+    var list: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&list) == 0 else { return false }
+    defer { freeifaddrs(list) }
+    var p = list
+    while let ifa = p {
+        if let sa = ifa.pointee.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET) {
+            let a = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr }
+            let b = withUnsafeBytes(of: a) { Array($0) }
+            if b[0] == 100 && (64...127).contains(b[1]) { return true }
+        }
+        p = ifa.pointee.ifa_next
     }
     return false
+}
+
+/// 밖으로 안 나가는 IP 인지: 사설·루프백·링크 로컬, Tailscale(100.64/10, 켜져 있을 때만), IPv6 ::1·fc00::/7·fe80::/10
+func isLocalIP(_ b: [UInt8]) -> Bool {
+    if b.count == 4 {
+        return b[0] == 10 || b[0] == 127
+            || (b[0] == 172 && (16...31).contains(b[1]))
+            || (b[0] == 192 && b[1] == 168)
+            || (b[0] == 169 && b[1] == 254)
+            || (b[0] == 100 && (64...127).contains(b[1]) && hasCGNATInterface())
+    }
+    if b.count == 16 {
+        return b == [UInt8](repeating: 0, count: 15) + [1]
+            || b[0] & 0xfe == 0xfc
+            || (b[0] == 0xfe && b[1] & 0xc0 == 0x80)
+    }
+    return false
+}
+
+func normalizedHost(_ host: String?) -> String? {
+    guard var h = host?.lowercased(), !h.isEmpty else { return nil }
+    if h.hasPrefix("[") { h = String(h.dropFirst().dropLast()) }
+    if h.hasSuffix(".") { h = String(h.dropLast()) }
+    return h
+}
+
+/// 집 안·Tailscale 처럼 밖으로 안 나가는 주소인지. 이런 곳만 http(암호화 없음)로 읽는다.
+/// ATS 는 모두 허용(NSAllowsArbitraryLoads)이라 http 를 막는 곳은 여기와 `checkResolvesLocal` 뿐이다.
+/// (NSAllowsLocalNetworking 은 Tailscale 100.x 를 내부망으로 안 쳐 -1022 로 막는다 — 2026-10-28 실측)
+func isLocalHost(_ host: String?) -> Bool {
+    guard let h = normalizedHost(host) else { return false }
+    if let b = ipBytes(h) { return isLocalIP(b) }
+    // 16843009·0x01010101 처럼 정수 하나로 쓴 IP 는 공개 주소일 수 있다
+    if h.hasPrefix("0x") || h.allSatisfy(\.isNumber) || h.contains(":") { return false }
+    // 이름은 점 없는 이름(MagicDNS 등)·.local 만 — 실제로 어디로 풀리는지는 보내기 전에 다시 본다
+    return h == "localhost" || !h.contains(".") || h.hasSuffix(".local")
+}
+
+/// 이름으로 넣은 http 주소가 정말 내부 IP 로만 풀리는지. 공용 와이파이 DNS 가 `nas` 를 바깥 IP 로 답하면 막는다.
+func checkResolvesLocal(_ host: String) throws {
+    var hints = addrinfo(ai_flags: 0, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM, ai_protocol: 0,
+                         ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
+    var res: UnsafeMutablePointer<addrinfo>?
+    guard getaddrinfo(host, nil, &hints, &res) == 0, let first = res else { throw URLError(.cannotFindHost) }
+    defer { freeaddrinfo(first) }
+    var p: UnsafeMutablePointer<addrinfo>? = first
+    while let ai = p {
+        var b: [UInt8] = []
+        if ai.pointee.ai_family == AF_INET {
+            let a = ai.pointee.ai_addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr }
+            b = withUnsafeBytes(of: a) { Array($0) }
+        } else if ai.pointee.ai_family == AF_INET6 {
+            let a = ai.pointee.ai_addr.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee.sin6_addr }
+            b = withUnsafeBytes(of: a) { Array($0) }
+        }
+        if !isLocalIP(b) { throw StatusError.insecurePublic }
+        p = ai.pointee.ai_next
+    }
 }
 
 /// 공개 주소에 http 로 토큰·상태를 보내지 않는다 — 가는 길에 누구나 읽을 수 있다.
@@ -144,6 +204,9 @@ enum StatusClient {
         if source.badURL { throw StatusError.badURL }
         guard let url = source.url else { throw StatusError.noURL }
         if isPlainHTTPToPublic(url) { throw StatusError.insecurePublic }
+        if url.scheme?.lowercased() == "http", let h = normalizedHost(url.host), ipBytes(h) == nil {
+            try checkResolvesLocal(h)
+        }
         var req = URLRequest(url: url)
         req.timeoutInterval = 20
         if let token = source.token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

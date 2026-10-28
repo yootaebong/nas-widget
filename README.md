@@ -211,7 +211,7 @@ curl -H "Authorization: Bearer <토큰>" http://<중앙 서버 IP>:8080/status
 | **다른 VPN** — WireGuard·ZeroTier·시놀로지 VPN Server | 이미 쓰는 VPN 이 있을 때 | `http://<VPN 안 IP>:8080/status` |
 | **https 로 열기** — 시놀로지 리버스 프록시 + Let's Encrypt, Cloudflare Tunnel 등 | VPN 을 켜지 않고 보고 싶을 때 | `https://status.내도메인/status` |
 
-- **Tailscale**: 중앙 서버에서 `tailscale ip -4` 로 IP 를 보고, `.env` 의 `LISTEN_IP` 를 그 IP 로 바꾼 뒤 `docker compose up -d` 를 다시 합니다. 집 안에서도 그 주소로 됩니다.
+- **Tailscale**: 주소에는 Tailscale IP(100.x) 나 MagicDNS 이름(예: `http://mynas:8080/status`, 점 없는 기기 이름) 둘 다 됩니다. 100.x 는 이 맥에서 Tailscale 이 켜져 있을 때만 받습니다(꺼져 있으면 통신사 망 주소일 수 있어 막음). 중앙 서버에서 `tailscale ip -4` 로 IP 를 보고, `.env` 의 `LISTEN_IP` 를 그 IP 로 바꾼 뒤 `docker compose up -d` 를 다시 합니다. 집 안에서도 그 주소로 됩니다.
   - **시놀로지**의 Tailscale 패키지는 Tailscale IP 를 장치로 만들지 않아 그 IP 에는 열 수 없습니다(`ip -4 addr` 에 100.x 가 안 보이면 이 경우). 대신 `LISTEN_IP=127.0.0.1` 로 두면 Tailscale 로 들어온 연결이 그쪽으로 넘어옵니다. 이때는 집 안 IP 로는 안 보이니, 맥에서도 Tailscale 을 켜 두세요.
 - **다른 VPN**: 보통 10.x·172.16~31.x·192.168.x 주소를 써서 위젯이 http 를 그대로 받습니다. 그 밖의 주소를 쓰는 VPN 이면 https 방법을 쓰세요. `LISTEN_IP` 는 VPN 이 중앙 서버에 준 IP 로 바꿉니다.
 - **https 로 열기**: 인터넷에 열리므로 토큰이 유일한 문입니다 — 긴 토큰을 쓰세요. 프록시는 `http://<LISTEN_IP>:8080` 으로 넘기면 됩니다. Cloudflare Access 처럼 앞에 로그인 화면을 두는 방식은 위젯이 로그인을 못 해서 쓸 수 없습니다.
@@ -299,7 +299,7 @@ xcconfig 에서 `//` 는 주석이라 URL 은 `http:/$()/host:port/path` 처럼 
 ## 보안 메모
 
 - 앱은 샌드박스 안에서 네트워크 클라이언트 권한만 씁니다.
-- `http://` 는 집 안·VPN 주소에만 씁니다. 공개 주소에 http 를 넣으면 위젯이 토큰을 보내지 않고 거절합니다 — 가는 길에 누구나 읽을 수 있어서요. 이 검사는 앱이 직접 합니다(`isPlainHTTPToPublic`). 애플 ATS 의 "내부망만 허용"은 Tailscale 100.x 를 막아서 ATS 는 모두 허용으로 두었습니다(v1.8~).
+- `http://` 는 집 안·VPN 주소에만 씁니다. 공개 주소에 http 를 넣으면 위젯이 토큰을 보내지 않고 거절합니다 — 가는 길에 누구나 읽을 수 있어서요. 이 검사는 앱이 직접 합니다(`isPlainHTTPToPublic`) — 이름으로 넣은 주소(`nas`·`nas.local`)는 보내기 전에 실제로 풀리는 IP 가 모두 내부 주소인지 다시 봐서, 공용 와이파이 DNS 가 바깥 IP 를 알려 줘도 토큰을 보내지 않습니다. 애플 ATS 의 "내부망만 허용"은 Tailscale 100.x 를 막아서 ATS 는 모두 허용으로 두었습니다(v1.8~).
 - 응답은 512KB 까지만 받고, 위젯에 다 못 그리는 항목은 버립니다.
 - 위젯 편집에 넣은 주소·토큰은 macOS 위젯 설정에, 앱 창의 값은 앱 설정 파일에 평문으로 저장됩니다(위젯 편집 칸은 가려지지 않습니다). 토큰은 상태 조회 전용이지만, 새었다고 생각되면 `config.toml` 의 `token` 을 바꾸고 `docker compose restart nas-widget-server` 한 뒤 위젯에 새 값을 넣으세요.
 - 상태 서버는 Bearer 헤더 토큰만 받습니다(`?token=` 주소 방식은 `allow_query_token = true` 일 때만 — 프록시 로그에 남습니다). 동시 연결 32개, 요청 헤더 15초 제한이 있고, root 가 아닌 사용자·읽기 전용 파일 시스템·권한 없이 돕니다.

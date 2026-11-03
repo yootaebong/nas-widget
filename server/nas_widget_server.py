@@ -34,6 +34,8 @@ DEFAULT_CACHE_SECONDS = 30
 DEFAULT_SERVICE_TIMEOUT = 5.0
 SOURCE_TIMEOUT = 10.0
 AUTH_RETRY_SECONDS = 5.0
+# Beszel 은 만료된 토큰에 401 대신 빈 목록(200)을 준다 — 만료 전에 미리 새로 받는다(기본 수명 5일)
+BESZEL_TOKEN_MAX_AGE = 3600.0
 BESZEL_PER_PAGE = 200
 SERVICE_WORKERS = 12
 BYTES_PER_MB = 1048576
@@ -114,6 +116,7 @@ class Beszel:
         self.password = str(cfg.get("password", ""))
         self.order: list[str] = [str(n) for n in cfg.get("order", [])]
         self._token: str | None = None
+        self._token_at = 0.0
         self._auth_failed_at = 0.0
         self._lock = threading.Lock()
 
@@ -138,11 +141,18 @@ class Beszel:
             raise
 
     def get(self, path: str) -> Any:
-        """토큰은 캐시하고, 401·403 이면 한 번 새로 받아 다시 부른다. 토큰 발급 실패는 다음 요청에서 다시 시도."""
+        """토큰은 BESZEL_TOKEN_MAX_AGE 동안 캐시하고, 401·403 이면 한 번 새로 받아 다시 부른다. 토큰 발급 실패는 다음 요청에서 다시 시도."""
         for attempt in range(2):
             with self._lock:
                 if self._token is None:
                     self._token = self._auth()
+                    self._token_at = time.monotonic()
+                elif time.monotonic() - self._token_at >= BESZEL_TOKEN_MAX_AGE:
+                    try:
+                        self._token = self._auth()
+                        self._token_at = time.monotonic()
+                    except Exception as e:  # 옛 토큰은 아직 유효할 수 있으니 계속 쓰고 다음 요청에 다시 갈아 본다
+                        log.warning("Beszel 토큰 미리 갈기 실패: %s", e)
                 tok = self._token
             try:
                 return http_json(self.url + path, {"Authorization": tok})

@@ -304,6 +304,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(st["issued"], 2)  # 401 뒤 재발급
         self.assertEqual(len(body["systems"]), 3)
 
+    def test_beszel_token_renewed_by_age(self) -> None:
+        # 만료된 토큰은 401 이 아니라 빈 목록으로 온다 — 나이로 미리 갈아야 한다
+        bz, st = self.beszel()
+        base = self.start({"beszel": self.beszel_cfg(bz.url)})
+        self.addCleanup(setattr, srv, "BESZEL_TOKEN_MAX_AGE", srv.BESZEL_TOKEN_MAX_AGE)
+        srv.BESZEL_TOKEN_MAX_AGE = 0.2
+        self.get(base + "/status")
+        time.sleep(0.3)
+        code, body = self.get(base + "/status")
+        self.assertEqual(code, 200)
+        self.assertEqual(st["issued"], 2)  # 401 없이 나이로 재발급
+        self.assertEqual(len(body["systems"]), 3)
+
     def test_utf8_raw(self) -> None:
         bz, _ = self.beszel()
         base = self.start({"beszel": self.beszel_cfg(bz.url)})
